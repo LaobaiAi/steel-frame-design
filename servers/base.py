@@ -4,6 +4,11 @@ CAIAO 轻量 Server 基类
 每个原子 Server 继承此类，通过 list_tools() 声明能力，
 通过 call_tool() 执行，遵守统一的 CAIAO 轻量契约。
 
+CAIAO Server 契约（v1.0）:
+- list_tools()    — 声明工具能力
+- call_tool()     — 执行工具
+- get_metadata()  — 返回 Server 元数据（v2.0 新增）
+
 设计原则：
 - 原子化：每个 Server 功能单一，无运行时依赖
 - 契约化：统一接口，基于 JSON Schema 通信
@@ -35,6 +40,11 @@ def tool(name: str, description: str, input_schema: dict):
 class CAIAOServer:
     """CAIAO 原子 Server 基类。
 
+    契约方法（子类应实现/覆盖）:
+        list_tools()    — 返回工具列表
+        call_tool()     — 执行工具
+        get_metadata()  — 返回 Server 元数据（v2.0 新增）
+
     用法:
         class MyServer(CAIAOServer):
             @tool("my_tool", "Does something", {...})
@@ -44,6 +54,14 @@ class CAIAOServer:
         if __name__ == "__main__":
             MyServer().run_stdio_loop()
     """
+
+    # ── 类级元信息（子类应覆盖）────────────────────────────────
+
+    server_name: str = ""
+    server_version: str = "1.0.0"
+    server_category: str = "general"
+    server_description: str = ""
+    server_dependencies: list[str] = []
 
     def __init__(self):
         self._tools: dict[str, Callable] = {}
@@ -75,6 +93,29 @@ class CAIAOServer:
         except Exception as e:
             return {"error": f"Tool '{tool_name}' execution failed: {str(e)}"}
 
+    # ── 元数据接口（v2.0 新增）────────────────────────────────
+
+    def get_metadata(self) -> dict:
+        """返回 Server 元数据，符合 CAIAO Server Spec v1.0。
+
+        Returns:
+            dict 包含 name, version, category, description, tools,
+            dependencies, compatibility 字段。
+        """
+        return {
+            "name": self.server_name or self.__class__.__name__,
+            "version": self.server_version,
+            "category": self.server_category,
+            "description": self.server_description or (self.__doc__ or "").strip(),
+            "tools": [{"name": t["name"], "description": t["description"]}
+                       for t in self.list_tools()],
+            "dependencies": self.server_dependencies,
+            "compatibility": {
+                "caiao_spec": "1.0",
+                "mcp": True,
+            },
+        }
+
     # ── stdio 循环（用于将来 MCP 集成）────────────────────────
 
     def run_stdio_loop(self):
@@ -101,6 +142,8 @@ class CAIAOServer:
                     input_data = request.get("params", {}).get("input", {})
                     result = self.call_tool(tool_name, input_data)
                     response = {"id": req_id, "result": result}
+                elif method == "get_metadata":
+                    response = {"id": req_id, "result": self.get_metadata()}
                 else:
                     response = {"id": req_id, "error": f"Unknown method: {method}"}
 
