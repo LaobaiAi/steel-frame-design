@@ -1,5 +1,76 @@
 # Steel Frame Design 开发手册
 
+> **版本**: v2.0 — CAIAO Standard
+> **最后更新**: 2026-05-25
+
+---
+
+## 0. v2.0 升级概要（全 CAIAO 化）
+
+v2.0 完成了从"CAIAO 使用者"到"CAIAO 标准参考实现"的架构升级。
+
+### 新增组件
+
+| 组件 | 路径 | 说明 |
+|------|------|------|
+| **CAIAO Hub** | `caiao_hub.py` | 轻量调度中心：自动发现、工具注册、路由代理 |
+| **3D 导出器** | `servers/three_d_exporter.py` | 将模型导出为 Three.js 可渲染的 3D JSON |
+| **LLM 参数提取器** | `servers/llm_param_extractor.py` | 自然语言 → 设计参数 YAML |
+| **LLM Agent 循环** | `servers/llm_agent_loop.py` | ReAct 循环：LLM 自主发现工具并编排全流程 |
+| **CLI 编排器** | `servers/cli_orchestrator.py` | 三种模式统一入口 (engineering/llm-param/llm-agent) |
+| **前端 3D 可视化** | `frontend/` | Three.js 钢框架 3D 查看器 |
+| **CAIAO 规范** | `specs/CAIAO_SERVER_V1.md` | Server 标准契约文档 |
+| **3D 数据 Schema** | `schemas/three_d_data.schema.json` | 3D 数据接口格式 |
+
+### 架构变化
+
+```
+v1.0 (直接 import)              v2.0 (Hub 调度)
+┌────────────┐                  ┌────────────┐
+│   CLI      │                  │   CLI      │
+│   main.py  │                  │   main.py  │
+└─────┬──────┘                  └─────┬──────┘
+      │                               │
+┌─────▼──────┐                  ┌─────▼──────┐
+│  Pipeline  │                  │ CliOrches- │
+│  (import   │                  │  trator    │
+│   各Server)│                  │  (Hub调度) │
+└─┬──┬──┬──┬─┘                  └─────┬──────┘
+  │  │  │  │                          │
+  ▼  ▼  ▼  ▼                    ┌─────▼──────┐
+ Gen Load Run Check              │ CAIAO Hub  │
+                                 │ find/call  │
+                                 └─┬──┬──┬──┬─┘
+                                   ▼  ▼  ▼  ▼
+                                  Gen Load Run Check ...
+```
+
+**核心变化**: Server 间不再直接 import，所有调用通过 `Hub.call_tool()` 传递 JSON。
+
+### 向后兼容
+
+- `python cli/main.py run --quick` — 完全兼容，底层已升级为 Hub 调度
+- `python cli/main.py run --input sample.yaml` — 完全兼容
+- Pipeline 直接实例化仍可用（`SteelFramePipeline()` 不加 hub 参数时自动回退）
+
+### 新增调用方式
+
+```bash
+# LLM 参数提取模式
+python cli/main.py run --mode llm-param --prompt "设计一个三层钢框架..." --api-key sk-xxx
+
+# LLM Agent 模式
+python cli/main.py run --mode llm-agent --prompt "校核两层钢结构..." --api-key sk-xxx
+
+# 3D 数据导出
+python servers/three_d_exporter.py export_3d_model '{"model": {...}}'
+
+# 前端 3D 查看
+cd frontend && python -m http.server 8000
+```
+
+---
+
 ## 1. 项目架构全景图
 
 ```
