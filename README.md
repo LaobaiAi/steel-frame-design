@@ -1,50 +1,58 @@
 <p align="center">
-  <img src="https://img.shields.io/badge/python-3.10+-blue?style=flat-square&logo=python" alt="Python">
-  <img src="https://img.shields.io/badge/license-MIT-green?style=flat-square" alt="License">
-  <img src="https://img.shields.io/badge/CAIAO-Server%20Native-orange?style=flat-square" alt="CAIAO">
-  <img src="https://img.shields.io/badge/GB50017-compliant-red?style=flat-square" alt="GB50017">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://img.shields.io/badge/XuanwuAI-0891b2?style=for-the-badge">
+    <img alt="XuanwuAI" src="https://img.shields.io/badge/XuanwuAI-0e7490?style=for-the-badge">
+  </picture>
 </p>
 
 <h1 align="center">XuanwuAI Steel Frame Design</h1>
 
 <p align="center">
-  <strong>Parametric steel frame design — one-click full pipeline</strong><br>
-  <em>Parametric Modeling → Load Application → FEA → GB50017 Code Check → Report</em>
+  <b>AI-powered parametric steel frame design pipeline</b><br/>
+  YAML → Frame Generation → Load Application → FEA → GB50017 Code Check → Report
 </p>
 
 <p align="center">
-  <a href="#-玄武--xuanwu">Philosophy</a> ·
-  <a href="#what-is-xuanwuai-steel-frame-design">About</a> ·
-  <a href="#architecture">Architecture</a> ·
-  <a href="#key-features">Features</a> ·
+  <img src="https://img.shields.io/badge/python-3.10+-blue?logo=python&logoColor=white" alt="Python">
+  <img src="https://img.shields.io/badge/numpy-numeric-013243?logo=numpy&logoColor=white" alt="NumPy">
+  <img src="https://img.shields.io/badge/GB50017-compliant-red" alt="GB50017">
+  <img src="https://img.shields.io/badge/CAIAO-Server%20Native-orange" alt="CAIAO">
+  <img src="https://img.shields.io/badge/license-MIT-green" alt="License">
+</p>
+
+<p align="center">
   <a href="#quick-start">Quick Start</a> ·
+  <a href="#key-features">Why</a> ·
+  <a href="#architecture">Architecture</a> ·
   <a href="#project-structure">Structure</a> ·
-  <a href="#documentation">Docs</a>
+  <a href="#documentation">Docs</a> ·
+  <a href="#contributing">Contributing</a> ·
+  <a href="./README_CN.md">中文</a>
 </p>
 
 ---
 
-## 玄武 · Xuanwu
+## Xuanwu · Brand Philosophy
 
-渊默之算 · Abyssal Computation
+*Abyssal Computation*
 
 > **Wisdom computes all things; Stability governs heaven and earth.**
 
-**玄武 (Xuanwu)**, the god of the North in Chinese mythology, is a divine hybrid of **tortoise and serpent** — the perfect embodiment of *ultimate stability* and *adaptive intelligence* in unity.
+**Xuanwu**, the god of the North in Chinese mythology, is a divine hybrid of **tortoise and serpent** — the perfect embodiment of *ultimate stability* and *adaptive intelligence* in unity.
 
 | Symbol | Meaning | In XuanwuAI |
 |--------|---------|-------------|
 | 🛡️ **Tortoise** (Aegis) | Absolute defense, order, and unshakable foundation | The rock-solid physics engine kernel and precise rule system that anchor every simulation |
-| 🐍 **Serpent** (Python) | Agility, wisdom, and precise execution | The high-level AI algorithms that autonomously plan, adapt, and devise optimal demolition strategies in complex environments |
+| 🐍 **Serpent** (Python) | Agility, wisdom, and precise execution | The high-level AI algorithms that autonomously plan, adapt, and devise optimal strategies in complex environments |
 
-XuanwuAI is part of the **Four Symbols AI** (四象AI) family, each embodying a cardinal virtue:
+XuanwuAI is part of the **Four Symbols AI** family, each embodying a cardinal virtue:
 
 | Deity | Element | Virtue | Domain |
 |-------|---------|--------|--------|
-| **QinglongAI** 青龙 | 木 Wood | 创生之智 · Generative Creation | Generative AI, creative intelligence |
-| **ZhuqueAI** 朱雀 | 火 Fire | 燎原之火 · Connective Flame | Intelligent interaction, human-AI experience |
-| **BaihuAI** 白虎 | 金 Metal | 肃金之盾 · Purifying Shield | AI-native security, adversarial defense |
-| **XuanwuAI** 玄武 | 水 Water | **渊默之算 · Abyssal Computation** | Complex simulation, strategic decision-making |
+| **QinglongAI** | Wood | Generative Creation | Generative AI, creative intelligence |
+| **ZhuqueAI** | Fire | Connective Flame | Intelligent interaction, human-AI experience |
+| **BaihuAI** | Metal | Purifying Shield | AI-native security, adversarial defense |
+| **XuanwuAI** | Water | **Abyssal Computation** | Complex simulation, strategic decision-making |
 
 > Xuanwu corresponds to the **Water element** — depth, wisdom, and the power to mirror reality within digital worlds. As the foundation of the Four Symbols, it provides the computational bedrock upon which creation, connection, and defense are built.
 
@@ -226,15 +234,15 @@ python cli/main.py run --quick && python tests/test_servers.py
 
 | Feature | Status |
 |---------|--------|
-| Parametric regular frame modeling | Done |
-| Dead / Live / Wind / Seismic load generation | Done |
-| 2D elastic matrix displacement analysis | Done |
-| GB50017 strength & stability check | Done |
-| CLI one-command + HTML report | Done |
-| OpenSeesPy nonlinear integration | Planned |
-| Irregular frame topology support | Planned |
-| MCP (stdio JSON-RPC) protocol upgrade | Planned |
-| Web Dashboard visualization | Planned |
+| Parametric regular frame modeling | ✅ Done |
+| Dead / Live / Wind / Seismic load generation | ✅ Done |
+| 2D elastic matrix displacement analysis | ✅ Done |
+| GB50017 strength & stability check | ✅ Done |
+| CLI one-command + HTML report | ✅ Done |
+| OpenSeesPy nonlinear integration | 🔜 Planned |
+| Irregular frame topology support | 🔜 Planned |
+| MCP (stdio JSON-RPC) protocol upgrade | 🔜 Planned |
+| Web Dashboard visualization | 🔜 Planned |
 
 ---
 
@@ -243,9 +251,7 @@ python cli/main.py run --quick && python tests/test_servers.py
 | Document | Description |
 |----------|-------------|
 | [DEVELOPMENT_MANUAL.md](docs/DEVELOPMENT_MANUAL.md) | Complete technical manual — architecture, Server design details, I/O examples |
-| [decisions.md](docs/decisions.md) | Design decision log — every key tradeoff documented |
 | [CAIAO_DISTILLATION_GUIDE.md](docs/CAIAO_DISTILLATION_GUIDE.md) | Distillation methodology — how to extract domain skills into CAIAO Servers |
-| [FULL_PIPELINE_PLAN.md](钢框架全流程蒸馏执行计划.md) | Original execution plan (Chinese) |
 
 ---
 
@@ -254,6 +260,18 @@ python cli/main.py run --quick && python tests/test_servers.py
 - [StructureClaw](https://github.com/structureclaw/structureclaw) — Source of distilled structural engineering capabilities
 - [Demolition-Simulator (CAIAO)](https://github.com/LaobaiAi/Demolition-Simulator) — CAIAO Server ecosystem and application platform
 - [OpenSeesPy Docs](https://openseespydoc.readthedocs.io/)
+
+---
+
+## Contributing
+
+Contributions are welcome! Whether it's a new feature, bug fix, or documentation improvement:
+
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
 
 ---
 
