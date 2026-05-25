@@ -1,0 +1,586 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>钢框架设计 完整仪表盘 — CAIAO v2.0</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif;
+    background: #0f0f1a; color: #d0d0e0;
+    display: flex; height: 100vh; overflow: hidden;
+  }
+
+  /* ===== 左侧 3D 视图 ===== */
+  #viewer-panel {
+    flex: 1; position: relative; min-width: 0;
+    border-right: 1px solid rgba(255,255,255,0.08);
+  }
+  #viewer-panel canvas { display: block; }
+
+  /* ===== 右侧信息面板 ===== */
+  #info-panel {
+    width: 400px; display: flex; flex-direction: column;
+    background: #13132a; overflow-y: auto;
+  }
+  #info-panel::-webkit-scrollbar { width: 4px; }
+  #info-panel::-webkit-scrollbar-thumb { background: #333; border-radius: 2px; }
+
+  /* 面板头部 */
+  .panel-header {
+    padding: 16px 20px;
+    background: linear-gradient(135deg, #1a1a3e, #0d0d24);
+    border-bottom: 1px solid rgba(100,181,246,0.15);
+  }
+  .panel-header h2 { font-size: 16px; color: #64b5f6; margin-bottom: 4px; }
+  .panel-header .subtitle { font-size: 11px; color: #6060a0; }
+
+  /* 统计卡片 */
+  .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 12px 16px; }
+  .stat-card {
+    background: rgba(26,26,62,0.7); border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 8px; padding: 12px; text-align: center;
+  }
+  .stat-card .value { font-size: 24px; font-weight: bold; }
+  .stat-card .label { font-size: 10px; color: #8080b0; margin-top: 2px; }
+  .stat-card.good .value { color: #4ade80; }
+  .stat-card.warn .value { color: #facc15; }
+  .stat-card.bad .value { color: #ef4444; }
+  .stat-card.info .value { color: #64b5f6; }
+
+  /* 工况选择 */
+  .loadcase-bar {
+    display: flex; gap: 4px; padding: 0 16px 10px;
+    flex-wrap: wrap;
+  }
+  .lc-btn {
+    flex: 1; min-width: 60px; padding: 6px 8px;
+    border: 1px solid rgba(255,255,255,0.1); border-radius: 6px;
+    background: transparent; color: #9090c0;
+    cursor: pointer; font-size: 11px; text-align: center;
+    transition: all 0.2s;
+  }
+  .lc-btn:hover { border-color: #64b5f6; color: #d0d0ff; }
+  .lc-btn.active { background: #1e3a5f; border-color: #64b5f6; color: #fff; }
+
+  /* 构件列表 */
+  .section-title {
+    padding: 10px 16px 6px;
+    font-size: 12px; color: #8080c0; text-transform: uppercase;
+    letter-spacing: 1px; border-top: 1px solid rgba(255,255,255,0.06);
+  }
+  .elem-table {
+    padding: 0 16px 12px;
+  }
+  .elem-table table { width: 100%; font-size: 11px; border-collapse: collapse; }
+  .elem-table th {
+    text-align: left; padding: 6px 4px;
+    color: #8080b0; font-weight: 500; border-bottom: 1px solid rgba(255,255,255,0.06);
+  }
+  .elem-table td { padding: 5px 4px; border-bottom: 1px solid rgba(255,255,255,0.03); }
+  .elem-table tr.clickable { cursor: pointer; transition: background 0.15s; }
+  .elem-table tr.clickable:hover { background: rgba(100,181,246,0.08); }
+  .elem-table tr.highlight { background: rgba(100,181,246,0.15) !important; }
+  .tag { display: inline-block; padding: 1px 6px; border-radius: 3px; font-size: 10px; }
+  .tag-pass { background: #1a3a1a; color: #4ade80; }
+  .tag-fail { background: #3a1a1a; color: #ef4444; }
+  .tag-col { background: #1a2a3a; color: #64b5f6; }
+  .tag-beam { background: #2a3a1a; color: #a3e635; }
+
+  /* 图例 */
+  #legend-bar {
+    display: flex; align-items: center; gap: 8px;
+    padding: 6px 16px 12px;
+    border-top: 1px solid rgba(255,255,255,0.06);
+  }
+  .gradient-bar {
+    width: 100px; height: 8px;
+    background: linear-gradient(to right, #00ff00, #ffff00, #ff0000);
+    border-radius: 4px;
+  }
+  .legend-text { font-size: 10px; color: #7070a0; }
+
+  /* 悬浮控件 */
+  #overlay-controls {
+    position: absolute; top: 12px; right: 12px;
+    display: flex; flex-direction: column; gap: 6px; z-index: 10;
+  }
+  .ctrl-btn {
+    width: 36px; height: 36px; border-radius: 8px;
+    border: 1px solid rgba(255,255,255,0.12);
+    background: rgba(19,19,42,0.85); color: #a0a0d0;
+    cursor: pointer; font-size: 14px;
+    display: flex; align-items: center; justify-content: center;
+    transition: all 0.15s;
+  }
+  .ctrl-btn:hover { background: rgba(100,181,246,0.15); border-color: #64b5f6; }
+
+  /* 构件 tooltip */
+  #elem-tooltip {
+    position: absolute; pointer-events: none;
+    background: rgba(0,0,0,0.9); color: #d0d0e0;
+    padding: 8px 12px; border-radius: 8px; font-size: 11px;
+    display: none; z-index: 200; white-space: nowrap;
+    border: 1px solid rgba(100,181,246,0.3);
+  }
+
+  /* 变形滑块 */
+  #deform-control {
+    position: absolute; bottom: 12px; left: 50%; transform: translateX(-50%);
+    display: flex; align-items: center; gap: 10px; z-index: 10;
+    background: rgba(19,19,42,0.88); padding: 8px 16px;
+    border-radius: 20px; border: 1px solid rgba(255,255,255,0.08);
+  }
+  #deform-control label { font-size: 11px; color: #9090c0; white-space: nowrap; }
+  #deform-control input[type=range] { accent-color: #f97316; width: 140px; }
+  #deform-control .scale-val { font-size: 11px; color: #f97316; min-width: 35px; text-align: center; }
+</style>
+</head>
+<body>
+
+<!-- ===== 左侧 3D 视图 ===== -->
+<div id="viewer-panel">
+  <canvas id="viewer-canvas"></canvas>
+
+  <div id="overlay-controls">
+    <button class="ctrl-btn" title="重置视角" onclick="resetView()">🔄</button>
+    <button class="ctrl-btn" title="俯视" onclick="viewTop()">⬆</button>
+    <button class="ctrl-btn" title="正视" onclick="viewFront()">⬛</button>
+    <button class="ctrl-btn" id="btn-wireframe" title="线框/实体" onclick="toggleWireframe()">🔲</button>
+  </div>
+
+  <div id="deform-control">
+    <label>📐 变形缩放</label>
+    <input type="range" id="deform-slider" min="0" max="300" value="100" step="5" oninput="updateDeform(this.value)">
+    <span class="scale-val" id="deform-val">1.0×</span>
+  </div>
+
+  <div id="elem-tooltip"></div>
+</div>
+
+<!-- ===== 右侧信息面板 ===== -->
+<div id="info-panel">
+  <div class="panel-header">
+    <h2>🏗️ 钢框架校核仪表盘</h2>
+    <div class="subtitle" id="meta-info">加载中...</div>
+  </div>
+
+  <!-- 统计 -->
+  <div class="stats-grid" id="stats-grid"></div>
+
+  <!-- 工况按钮 -->
+  <div class="section-title">📊 分析工况</div>
+  <div class="loadcase-bar" id="lc-bar"></div>
+
+  <!-- 构件列表 -->
+  <div class="section-title">📋 构件校核明细</div>
+  <div class="elem-table" id="elem-table-wrap">
+    <table>
+      <thead>
+        <tr><th>ID</th><th>类型</th><th>应力比</th><th>结果</th></tr>
+      </thead>
+      <tbody id="elem-tbody"></tbody>
+    </table>
+  </div>
+
+  <!-- 图例 -->
+  <div id="legend-bar">
+    <span class="legend-text">0</span>
+    <div class="gradient-bar"></div>
+    <span class="legend-text">≥1.0</span>
+  </div>
+</div>
+
+<!-- ===== Three.js ===== -->
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+// ── 全局状态 ──
+let scene, camera, renderer, controls, modelGroup, deformGroup;
+let model3d = null;          // model_3d.json data
+let checkData = null;        // check_results.json data
+let loadCaseData = {};       // load_case → { node_displacements, element_forces }
+let currentLoadCase = '';
+let elementMap = {};         // element_id → THREE meshes
+let meshToElemId = new Map();// mesh → element_id (for picking)
+let showWireframe = true;
+
+// ── Three.js 初始化 ──
+function initThree() {
+  const panel = document.getElementById('viewer-panel');
+  const W = panel.clientWidth, H = panel.clientHeight;
+
+  scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x0f0f1a);
+  scene.fog = new THREE.Fog(0x0f0f1a, 40, 200);
+
+  camera = new THREE.PerspectiveCamera(45, W / Math.max(H, 1), 0.5, 500);
+  camera.position.set(30, 25, 35);
+
+  renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('viewer-canvas'), antialias: true });
+  renderer.setSize(W, H);
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.shadowMap.enabled = true;
+
+  // 光源
+  scene.add(new THREE.AmbientLight(0x404060, 1.2));
+  const dir = new THREE.DirectionalLight(0xffffff, 1.5);
+  dir.position.set(30, 50, 30);
+  dir.castShadow = true;
+  scene.add(dir);
+  scene.add(new THREE.HemisphereLight(0x606080, 0x202040, 0.5));
+
+  // 网格
+  scene.add(new THREE.GridHelper(40, 40, 0x222244, 0x15152a));
+
+  // 容器
+  modelGroup = new THREE.Group();
+  deformGroup = new THREE.Group();
+  deformGroup.visible = false;
+  scene.add(modelGroup);
+  scene.add(deformGroup);
+
+  // 控制器
+  controls = new OrbitControls(camera, renderer.domElement);
+  controls.enableDamping = true;
+  controls.dampingFactor = 0.08;
+
+  // 事件
+  window.addEventListener('resize', onResize);
+  renderer.domElement.addEventListener('click', onPick);
+
+  animate();
+}
+
+function onResize() {
+  const panel = document.getElementById('viewer-panel');
+  camera.aspect = panel.clientWidth / Math.max(panel.clientHeight, 1);
+  camera.updateProjectionMatrix();
+  renderer.setSize(panel.clientWidth, panel.clientHeight);
+}
+
+function animate() {
+  requestAnimationFrame(animate);
+  controls.update();
+  renderer.render(scene, camera);
+}
+
+// ── 数据加载 ──
+async function loadAllData() {
+  try {
+    const [r3d, rck] = await Promise.all([
+      fetch('model_3d.json'),
+      fetch('check_results.json')
+    ]);
+    model3d = await r3d.json();
+    checkData = await rck.json();
+
+    // 收集荷载工况数据
+    const lcData = checkData.load_data || {};
+    for (const [name, lc] of Object.entries(lcData)) {
+      loadCaseData[name] = lc;
+    }
+
+    currentLoadCase = Object.keys(loadCaseData)[0] || '';
+    buildScene();
+    buildUI();
+  } catch (e) {
+    console.error('数据加载失败:', e);
+    document.getElementById('meta-info').textContent = '⚠ 数据加载失败，请将 model_3d.json 和 check_results.json 放在同目录';
+  }
+}
+
+// ── 颜色映射 ──
+function stressColor(ratio) {
+  const r = Math.min(ratio, 1.0);
+  if (r < 0.5) {
+    return new THREE.Color().setHSL(0.33, 1, 0.3 + r * 0.4);
+  } else {
+    return new THREE.Color().setHSL(0.33 - (r - 0.5) * 0.33, 1, 0.4);
+  }
+}
+
+// ── 构建模型 ──
+function buildScene() {
+  while (modelGroup.children.length) modelGroup.remove(modelGroup.children[0]);
+  elementMap = {};
+  meshToElemId.clear();
+
+  const nodes3d = model3d.nodes || [];
+  const elems3d = model3d.elements || [];
+  const nodeCoords = {};
+  for (const n of nodes3d) nodeCoords[n.id] = new THREE.Vector3(n.x, n.y, n.z);
+
+  // 获取应力比
+  const checkElems = checkData.elements || [];
+  const stressMap = {};
+  for (const ce of checkElems) stressMap[ce.id] = ce.max_stress_ratio ?? 0;
+
+  for (const el of elems3d) {
+    const ni = nodeCoords[el.node_i], nj = nodeCoords[el.node_j];
+    if (!ni || !nj) continue;
+
+    const mid = new THREE.Vector3().addVectors(ni, nj).multiplyScalar(0.5);
+    const dir = new THREE.Vector3().subVectors(nj, ni);
+    const len = dir.length();
+    if (len < 0.001) continue;
+
+    const sr = stressMap[el.id] ?? 0;
+    const color = stressColor(sr);
+    const isCol = (el.type === 'column');
+
+    // 截面
+    let h = isCol ? 0.35 : 0.30, w = isCol ? 0.35 : 0.25;
+    const geom = new THREE.BoxGeometry(w, h, len);
+    const mat = new THREE.MeshPhongMaterial({ color, specular: 0x111111, shininess: 20, transparent: true, opacity: 0.85 });
+    const box = new THREE.Mesh(geom, mat);
+    box.position.copy(mid);
+    const quat = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, 1), dir.normalize());
+    box.setRotationFromQuaternion(quat);
+    box.castShadow = true;
+    box.receiveShadow = true;
+
+    // 线框
+    const edgeGeom = new THREE.EdgesGeometry(geom);
+    const edgeMat = new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.15 });
+    const wire = new THREE.LineSegments(edgeGeom, edgeMat);
+    wire.position.copy(mid);
+    wire.setRotationFromQuaternion(quat);
+
+    elementMap[el.id] = { solid: box, wireframe: wire, nodeI: ni, nodeJ: nj, length: len, dir: dir.normalize() };
+    meshToElemId.set(box, el.id);
+
+    modelGroup.add(box);
+    modelGroup.add(wire);
+  }
+
+  // 柱脚标记
+  const zMin = Math.min(...nodes3d.map(n => n.z));
+  for (const n of nodes3d) {
+    if (Math.abs(n.z - zMin) < 0.05) {
+      const s = new THREE.Mesh(new THREE.SphereGeometry(0.12, 12, 12), new THREE.MeshPhongMaterial({ color: 0xff4444 }));
+      s.position.set(n.x, n.y, n.z);
+      modelGroup.add(s);
+    }
+  }
+
+  fitCamera();
+}
+
+// ── 变形 ──
+window.updateDeform = function(val) {
+  const scale = parseFloat(val) / 100;
+  document.getElementById('deform-val').textContent = scale.toFixed(1) + '×';
+
+  while (deformGroup.children.length) deformGroup.remove(deformGroup.children[0]);
+
+  if (scale === 0 || !currentLoadCase) { deformGroup.visible = false; return; }
+  deformGroup.visible = true;
+
+  const lc = loadCaseData[currentLoadCase];
+  if (!lc || !lc.displacements) return;
+
+  const nodes3d = model3d.nodes || [];
+  const origCoords = {};
+  for (const n of nodes3d) origCoords[n.id] = new THREE.Vector3(n.x, n.y, n.z);
+
+  // 位移映射（clamp 到合理范围）
+  const dispMap = {};
+  for (const d of lc.displacements) {
+    const dx = Math.max(-0.5, Math.min(0.5, (d.ux || 0)));
+    const dy = Math.max(-0.5, Math.min(0.5, (d.uy || 0)));
+    const dz = Math.max(-0.5, Math.min(0.5, (d.uz || 0)));
+    dispMap[d.node_id] = { dx: dx * scale, dy: dy * scale, dz: dz * scale };
+  }
+
+  for (const el of model3d.elements) {
+    const info = elementMap[el.id];
+    if (!info) continue;
+    const oi = origCoords[el.node_i], oj = origCoords[el.node_j];
+    if (!oi || !oj) continue;
+    const di = dispMap[el.node_i] || { dx: 0, dy: 0, dz: 0 };
+    const dj = dispMap[el.node_j] || { dx: 0, dy: 0, dz: 0 };
+
+    const defI = new THREE.Vector3(oi.x + di.dx, oi.y + di.dy, oi.z + di.dz);
+    const defJ = new THREE.Vector3(oj.x + dj.dx, oj.y + dj.dy, oj.z + dj.dz);
+
+    // 变形构件
+    const defLen = defJ.distanceTo(defI);
+    if (defLen < 0.001) continue;
+    const defMid = new THREE.Vector3().addVectors(defI, defJ).multiplyScalar(0.5);
+    const cylGeom = new THREE.CylinderGeometry(0.06, 0.06, defLen, 6);
+    const cylMat = new THREE.MeshPhongMaterial({ color: 0xff6600, transparent: true, opacity: 0.5, depthWrite: false });
+    const cyl = new THREE.Mesh(cylGeom, cylMat);
+    cyl.position.copy(defMid);
+    const q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), defJ.clone().sub(defI).normalize());
+    cyl.setRotationFromQuaternion(q);
+    deformGroup.add(cyl);
+
+    // 变形→原始连线
+    const linePts = [oi, defI, defJ, oj];
+    const lineGeom = new THREE.BufferGeometry().setFromPoints(linePts);
+    const lineMat = new THREE.LineBasicMaterial({ color: 0xff8800, transparent: true, opacity: 0.3, depthWrite: false });
+    deformGroup.add(new THREE.Line(lineGeom, lineMat));
+  }
+};
+
+// ── 拾取 ──
+function onPick(e) {
+  const mouse = new THREE.Vector2(
+    (e.offsetX / renderer.domElement.clientWidth) * 2 - 1,
+    -(e.offsetY / renderer.domElement.clientHeight) * 2 + 1
+  );
+  const rc = new THREE.Raycaster();
+  rc.setFromCamera(mouse, camera);
+  const hits = rc.intersectObjects([...meshToElemId.keys()]);
+  const tt = document.getElementById('elem-tooltip');
+  if (hits.length > 0) {
+    const eid = meshToElemId.get(hits[0].object);
+    if (eid && checkData) {
+      const ce = checkData.elements.find(c => c.id === eid);
+      if (ce) {
+        tt.innerHTML = `<b>构件 #${ce.id}</b><br>应力比: ${(ce.max_stress_ratio || 0).toFixed(4)}<br>结果: ${ce.pass ? '✅ 通过' : '❌ 不通过'}`;
+        tt.style.display = 'block';
+        tt.style.left = (e.offsetX + 15) + 'px';
+        tt.style.top = (e.offsetY + 15) + 'px';
+        setTimeout(() => tt.style.display = 'none', 2500);
+        // 高亮右侧列表
+        highlightRow(eid);
+      }
+    }
+  }
+}
+
+// ── UI 构建 ──
+function buildUI() {
+  // Meta
+  document.getElementById('meta-info').textContent =
+    `${checkData?.model_name || '钢框架'} | ${model3d.nodes.length} 节点 · ${checkData.summary?.total_elements || model3d.elements.length} 构件`;
+
+  // 统计
+  const s = checkData.summary || {};
+  const stats = document.getElementById('stats-grid');
+  stats.innerHTML = `
+    <div class="stat-card info"><div class="value">${s.total_elements || '-'}</div><div class="label">总构件</div></div>
+    <div class="stat-card good"><div class="value">${s.passed || '-'}</div><div class="label">通过</div></div>
+    <div class="stat-card bad"><div class="value">${s.failed || '-'}</div><div class="label">未通过</div></div>
+    <div class="stat-card ${(s.max_stress_ratio || 0) >= 1 ? 'bad' : 'warn'}"><div class="value">${(s.max_stress_ratio || 0).toFixed(3)}</div><div class="label">最大应力比</div></div>
+  `;
+
+  // 工况按钮
+  const lcBar = document.getElementById('lc-bar');
+  const lcNames = Object.keys(loadCaseData);
+  lcNames.forEach(lc => {
+    const btn = document.createElement('button');
+    btn.className = 'lc-btn' + (lc === currentLoadCase ? ' active' : '');
+    btn.textContent = lc;
+    btn.onclick = () => {
+      document.querySelectorAll('.lc-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      currentLoadCase = lc;
+      updateDeform(document.getElementById('deform-slider').value);
+    };
+    lcBar.appendChild(btn);
+  });
+
+  // 构件表
+  const tbody = document.getElementById('elem-tbody');
+  const elems = checkData.elements || [];
+  const passCount = elems.filter(e => e.pass).length;
+  const failCount = elems.length - passCount;
+
+  // 默认显示未通过的在前
+  const sorted = [...elems].sort((a, b) => {
+    if (a.pass !== b.pass) return a.pass ? 1 : -1;
+    return (b.max_stress_ratio || 0) - (a.max_stress_ratio || 0);
+  });
+
+  tbody.innerHTML = sorted.map(e => {
+    const typeTag = (e.type && e.type.toLowerCase().includes('col')) ? 'tag-col' : 'tag-beam';
+    const typeLabel = (e.type && e.type.toLowerCase().includes('col')) ? '柱' : '梁';
+    return `
+      <tr class="clickable" data-eid="${e.id}" onclick="highlightElem(${e.id})">
+        <td>${e.id}</td>
+        <td><span class="tag ${typeTag}">${typeLabel}</span></td>
+        <td style="color:${(e.max_stress_ratio || 0) >= 1 ? '#ef4444' : '#4ade80'}">${(e.max_stress_ratio || 0).toFixed(4)}</td>
+        <td><span class="tag ${e.pass ? 'tag-pass' : 'tag-fail'}">${e.pass ? '通过' : '不通过'}</span></td>
+      </tr>`;
+  }).join('');
+}
+
+function highlightRow(eid) {
+  document.querySelectorAll('#elem-tbody tr').forEach(r => r.classList.remove('highlight'));
+  const row = document.querySelector(`#elem-tbody tr[data-eid="${eid}"]`);
+  if (row) {
+    row.classList.add('highlight');
+    row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+}
+
+window.highlightElem = function(eid) {
+  const info = elementMap[eid];
+  if (info) {
+    const box = info.solid;
+    const target = box.position.clone();
+    controls.target.lerp(target, 0.5);
+    controls.update();
+    highlightRow(eid);
+  }
+};
+
+// ── 视角 ──
+function fitCamera() {
+  const ns = model3d.nodes;
+  const xs = ns.map(n => n.x), ys = ns.map(n => n.y), zs = ns.map(n => n.z);
+  const cx = (Math.min(...xs) + Math.max(...xs)) / 2;
+  const cy = (Math.min(...ys) + Math.max(...ys)) / 2;
+  const cz = (Math.min(...zs) + Math.max(...zs)) / 2;
+  const sz = Math.max(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys), Math.max(...zs) - Math.min(...zs));
+  controls.target.set(cx, cy, cz);
+  camera.position.set(cx + sz * 1.2, cy + sz, cz + sz * 1.5);
+  controls.update();
+}
+
+window.resetView = function() { fitCamera(); };
+window.viewTop = function() {
+  const ns = model3d.nodes;
+  const cx = ns.reduce((s, n) => s + n.x, 0) / ns.length;
+  const cz = Math.max(...ns.map(n => n.z)) + 5;
+  controls.target.set(cx, cz * 0.5, ns.reduce((s, n) => s + n.y, 0) / ns.length);
+  camera.position.set(cx, cz, ns.reduce((s, n) => s + n.y, 0) / ns.length);
+  controls.update();
+};
+window.viewFront = function() {
+  const ns = model3d.nodes;
+  const maxY = Math.max(...ns.map(n => n.y));
+  const cx = ns.reduce((s, n) => s + n.x, 0) / ns.length;
+  const cz = ns.reduce((s, n) => s + n.z, 0) / ns.length;
+  controls.target.set(cx, cz, 0);
+  camera.position.set(cx, cz, maxY + 15);
+  controls.update();
+};
+
+window.toggleWireframe = function() {
+  showWireframe = !showWireframe;
+  Object.values(elementMap).forEach(em => {
+    if (em.wireframe) em.wireframe.visible = showWireframe;
+  });
+  document.getElementById('btn-wireframe').style.borderColor = showWireframe ? '#64b5f6' : '';
+};
+
+// ── 启动 ──
+initThree();
+loadAllData();
+</script>
+</body>
+</html>

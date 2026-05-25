@@ -1,0 +1,112 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://caiao.io/schemas/steel-frame/three_d_data.schema.json",
+  "title": "Steel Frame 3D Visualization Data",
+  "description": "Three.js 可渲染的钢框架3D模型数据格式，由 3d-exporter Server 生成",
+  "type": "object",
+  "required": ["nodes", "elements", "bounding_box"],
+  "properties": {
+    "metadata": {
+      "type": "object",
+      "description": "模型元信息"
+    },
+    "nodes": {
+      "type": "array",
+      "description": "节点坐标列表",
+      "items": {
+        "type": "object",
+        "required": ["id", "x", "y", "z"],
+        "properties": {
+          "id": { "type": "integer" },
+          "x": { "type": "number" },
+          "y": { "type": "number" },
+          "z": { "type": "number" }
+        }
+      }
+    },
+    "elements": {
+      "type": "array",
+      "description": "构件列表",
+      "items": {
+        "type": "object",
+        "required": ["id", "node_i", "node_j"],
+        "properties": {
+          "id": { "type": "integer" },
+          "node_i": { "type": "integer" },
+          "node_j": { "type": "integer" },
+          "type": { "type": "string", "enum": ["column", "beam"] },
+          "section": { "type": "string" }
+        }
+      }
+    },
+    "sections": {
+      "type": "array",
+      "description": "截面属性列表"
+    },
+    "color_map": {
+      "type": "object",
+      "description": "构件颜色映射，键为构件ID字符串",
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "color": { "type": "string", "description": "CSS颜色字符串 (rgb格式)" },
+          "stress_ratio": { "type": "number" },
+          "stability_ratio": { "type": "number" },
+          "pass": { "type": "boolean" }
+        }
+      }
+    },
+    "deformed_nodes": {
+      "description": "变形后的节点坐标（null表示无变形数据）",
+      "oneOf": [
+        { "type": "null" },
+        {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["id", "x", "y", "z"],
+            "properties": {
+              "id": { "type": "integer" },
+              "x": { "type": "number" },
+              "y": { "type": "number" },
+              "z": { "type": "number" }
+            }
+          }
+        }
+      ]
+    },
+    "deformation_scale": {
+      "type": "number",
+      "description": "变形放大系数"
+    },
+    "load_case": {
+      "type": "string",
+      "description": "荷载工况名称"
+    },
+    "max_displacement": {
+      "type": "number",
+      "description": "最大位移 (m)"
+    },
+    "bounding_box": {
+      "type": "object",
+      "description": "模型包围盒",
+      "required": ["min", "max", "center"],
+      "properties": {
+        "min": { "type": "array", "items": { "type": "number" }, "minItems": 3, "maxItems": 3 },
+        "max": { "type": "array", "items": { "type": "number" }, "minItems": 3, "maxItems": 3 },
+        "center": { "type": "array", "items": { "type": "number" }, "minItems": 3, "maxItems": 3 }
+      }
+    },
+    "section_dimensions": {
+      "type": "object",
+      "description": "截面可视化尺寸（m），键为截面ID",
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "height": { "type": "number", "description": "截面高度 (m)" },
+          "width": { "type": "number", "description": "截面宽度 (m)" }
+        }
+      }
+    }
+  }
+}
