@@ -33,6 +33,12 @@ class SteelFrameGenerator(CAIAOServer):
     生成包含节点、单元、截面和材料的完整结构模型。
     """
 
+    server_name = "model-generator"
+    server_version = "1.0.0"
+    server_category = "structural_modeling"
+    server_description = "参数化生成钢框架结构模型：根据网格尺寸、层数、层高和截面选择生成完整模型JSON"
+    server_dependencies = ["numpy"]
+
     def __init__(self):
         super().__init__()
 

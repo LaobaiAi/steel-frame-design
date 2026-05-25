@@ -20,6 +20,12 @@ class SteelCodeCheck(CAIAOServer):
     - 长细比校核
     """
 
+    server_name = "code-checker"
+    server_version = "1.0.0"
+    server_category = "code_compliance"
+    server_description = "按GB50017-2017钢标对钢框架构件进行强度、稳定性、挠度和长细比校核"
+    server_dependencies = []
+
     def __init__(self):
         super().__init__()
 

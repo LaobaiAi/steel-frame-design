@@ -21,6 +21,12 @@ except ImportError:
 class ReportGenerator(CAIAOServer):
     """报告生成器。基于 Jinja2 模板生成 HTML 校核报告。"""
 
+    server_name = "report-generator"
+    server_version = "1.0.0"
+    server_category = "reporting"
+    server_description = "基于Jinja2模板生成钢框架校核HTML报告，含校核总览和构件明细表"
+    server_dependencies = ["jinja2"]
+
     def __init__(self):
         super().__init__()
         self._template_dir = os.path.join(os.path.dirname(__file__), "..", "templates")

@@ -20,6 +20,12 @@ class SteelLoadGenerator(CAIAOServer):
     - 边界条件（柱脚固接）
     """
 
+    server_name = "load-generator"
+    server_version = "1.0.0"
+    server_category = "load_analysis"
+    server_description = "为钢框架模型施加恒载、活载、风荷载和地震作用及边界条件"
+    server_dependencies = []
+
     def __init__(self):
         super().__init__()
 

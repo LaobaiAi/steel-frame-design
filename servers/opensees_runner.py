@@ -21,6 +21,12 @@ class OpenSeesRunner(CAIAOServer):
     支持 3D 空间梁单元，每节点 6 自由度。
     """
 
+    server_name = "fea-runner"
+    server_version = "1.0.0"
+    server_category = "structural_analysis"
+    server_description = "使用矩阵位移法对钢框架执行线性静力分析，输出位移和单元内力"
+    server_dependencies = ["numpy"]
+
     def __init__(self):
         super().__init__()
 
