@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://caiao.io/schemas/steel-frame/analysis_result.schema.json",
+  "title": "Analysis Result",
+  "description": "有限元分析结果：节点位移和单元内力",
+  "type": "object",
+  "required": ["displacements", "element_forces"],
+  "properties": {
+    "displacements": {
+      "type": "object",
+      "description": "节点位移 {node_id: [ux, uy, uz, rx, ry, rz]}",
+      "additionalProperties": {
+        "type": "array",
+        "items": { "type": "number" },
+        "minItems": 6,
+        "maxItems": 6
+      }
+    },
+    "element_forces": {
+      "type": "object",
+      "description": "单元内力 {element_id: {N, Vy, Vz, T, My, Mz}}",
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "N": { "type": "number", "description": "轴力" },
+          "Vy": { "type": "number", "description": "Y向剪力" },
+          "Vz": { "type": "number", "description": "Z向剪力" },
+          "T": { "type": "number", "description": "扭矩" },
+          "My": { "type": "number", "description": "Y向弯矩" },
+          "Mz": { "type": "number", "description": "Z向弯矩" }
+        }
+      }
+    },
+    "reactions": {
+      "type": "object",
+      "description": "支座反力",
+      "additionalProperties": {
+        "type": "array",
+        "items": { "type": "number" },
+        "minItems": 6,
+        "maxItems": 6
+      }
+    },
+    "summary": {
+      "type": "object",
+      "properties": {
+        "max_displacement": { "type": "number" },
+        "max_displacement_node": { "type": "integer" },
+        "total_time": { "type": "number" }
+      }
+    }
+  }
+}

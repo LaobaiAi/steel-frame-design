@@ -1,0 +1,26 @@
+# IDE & Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.eggs/
+.venv/
+venv/
+env/
+
+# Dev Notes (local only)
+dev-notes/
+
+# Output (runtime results)
+output/
+
+# Misc
+$null

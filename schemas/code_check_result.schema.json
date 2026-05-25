@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://caiao.io/schemas/steel-frame/code_check_result.schema.json",
+  "title": "Code Check Result",
+  "description": "规范校核结果（GB50017钢标）",
+  "type": "object",
+  "required": ["elements", "summary"],
+  "properties": {
+    "elements": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "pass"],
+        "properties": {
+          "id": { "type": "integer" },
+          "stress_ratio": { "type": "number" },
+          "stability_ratio": { "type": "number" },
+          "deflection_ratio": { "type": "number" },
+          "slenderness_ratio": { "type": "number" },
+          "pass": { "type": "boolean" },
+          "messages": {
+            "type": "array",
+            "items": { "type": "string" }
+          }
+        }
+      }
+    },
+    "summary": {
+      "type": "object",
+      "properties": {
+        "total_elements": { "type": "integer" },
+        "passed": { "type": "integer" },
+        "failed": { "type": "integer" },
+        "max_stress_ratio": { "type": "number" },
+        "max_deflection_ratio": { "type": "number" }
+      }
+    }
+  }
+}

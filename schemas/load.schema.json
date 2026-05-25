@@ -1,0 +1,74 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://caiao.io/schemas/steel-frame/load.schema.json",
+  "title": "Steel Frame Load Model",
+  "description": "在模型基础上增加荷载工况和边界条件",
+  "type": "object",
+  "required": ["model", "load_cases", "boundary_conditions"],
+  "properties": {
+    "model": {
+      "$ref": "./model.schema.json",
+      "description": "基础结构模型"
+    },
+    "load_cases": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "loads"],
+        "properties": {
+          "name": { "type": "string" },
+          "description": { "type": "string" },
+          "loads": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["element_id", "type", "values"],
+              "properties": {
+                "element_id": { "type": "integer" },
+                "node_id": { "type": "integer" },
+                "type": {
+                  "type": "string",
+                  "enum": ["uniform", "point", "trapezoidal"]
+                },
+                "direction": {
+                  "type": "string",
+                  "enum": ["global_x", "global_y", "global_z", "local_y", "local_z"],
+                  "default": "global_z"
+                },
+                "values": {
+                  "type": "object",
+                  "properties": {
+                    "q": { "type": "number" },
+                    "q1": { "type": "number" },
+                    "q2": { "type": "number" },
+                    "P": { "type": "number" },
+                    "Px": { "type": "number" },
+                    "Py": { "type": "number" },
+                    "Pz": { "type": "number" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "boundary_conditions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["node_id", "restraints"],
+        "properties": {
+          "node_id": { "type": "integer" },
+          "restraints": {
+            "type": "array",
+            "items": { "type": "boolean" },
+            "minItems": 6,
+            "maxItems": 6,
+            "description": "[ux, uy, uz, rx, ry, rz] true=约束"
+          }
+        }
+      }
+    }
+  }
+}

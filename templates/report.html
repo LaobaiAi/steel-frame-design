@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{{ title }}</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif; color: #333; padding: 40px; max-width: 960px; margin: 0 auto; }
+  h1 { color: #1a365d; border-bottom: 3px solid #2b6cb0; padding-bottom: 10px; margin-bottom: 20px; }
+  h2 { color: #2c5282; margin: 30px 0 15px; padding: 8px 0; border-bottom: 1px solid #e2e8f0; }
+  .meta { background: #edf2f7; padding: 15px 20px; border-radius: 6px; margin-bottom: 20px; }
+  table { width: 100%; border-collapse: collapse; margin: 15px 0; font-size: 13px; }
+  th { background: #2b6cb0; color: white; padding: 10px 8px; text-align: left; }
+  td { padding: 8px; border-bottom: 1px solid #e2e8f0; }
+  tr:nth-child(even) { background: #f7fafc; }
+  .pass { color: #2f855a; font-weight: bold; }
+  .fail { color: #e53e3e; font-weight: bold; }
+  .summary-box { display: flex; gap: 20px; flex-wrap: wrap; }
+  .stat { background: #ebf8ff; border: 1px solid #bee3f8; border-radius: 8px; padding: 15px 25px; text-align: center; min-width: 130px; }
+  .stat .num { font-size: 28px; font-weight: bold; color: #2b6cb0; }
+  .stat .label { font-size: 12px; color: #4a5568; margin-top: 4px; }
+  .footer { margin-top: 40px; padding-top: 15px; border-top: 1px solid #cbd5e0; color: #a0aec0; font-size: 12px; }
+</style>
+</head>
+<body>
+
+<h1>{{ title }}</h1>
+
+<div class="meta">
+  <p><strong>生成时间：</strong>{{ generated_at }}</p>
+  <p><strong>模型描述：</strong>{{ model_description }}</p>
+  <p><strong>分析工况：</strong>{{ load_cases | join('、') }}</p>
+</div>
+
+<h2>校核总览</h2>
+<div class="summary-box">
+  <div class="stat"><div class="num">{{ total_elements }}</div><div class="label">总构件数</div></div>
+  <div class="stat"><div class="num">{{ passed_count }}</div><div class="label">通过</div></div>
+  <div class="stat"><div class="num">{{ failed_count }}</div><div class="label">未通过</div></div>
+  <div class="stat"><div class="num">{{ "%.3f"|format(max_stress_ratio) }}</div><div class="label">最大应力比</div></div>
+  <div class="stat"><div class="num">{{ "%.3f"|format(max_deflection_ratio) }}</div><div class="label">最大挠度比</div></div>
+</div>
+
+<h2>构件校核明细</h2>
+<table>
+  <thead>
+    <tr>
+      <th>构件 ID</th>
+      <th>应力比</th>
+      <th>稳定比</th>
+      <th>挠度比</th>
+      <th>长细比</th>
+      <th>结果</th>
+      <th>备注</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for el in elements %}
+    <tr>
+      <td>{{ el.id }}</td>
+      <td>{{ "%.4f"|format(el.stress_ratio) }}</td>
+      <td>{{ "%.4f"|format(el.stability_ratio) }}</td>
+      <td>{{ "%.4f"|format(el.deflection_ratio) }}</td>
+      <td>{{ "%.1f"|format(el.slenderness_ratio) }}</td>
+      <td>
+        {% if el.pass %}
+        <span class="pass">✓ 通过</span>
+        {% else %}
+        <span class="fail">✗ 不通过</span>
+        {% endif %}
+      </td>
+      <td>{{ el.messages | join('; ') }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+<div class="footer">
+  <p>由 Steel Frame Design 自动生成 — CAIAO 原子 Server 演示项目</p>
+</div>
+
+</body>
+</html>

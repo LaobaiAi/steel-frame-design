@@ -1,0 +1,85 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://caiao.io/schemas/steel-frame/model.schema.json",
+  "title": "Steel Frame Model",
+  "description": "钢框架结构模型定义，包含节点、单元、截面和材料信息",
+  "type": "object",
+  "required": ["nodes", "elements", "sections", "materials"],
+  "properties": {
+    "metadata": {
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "units": {
+          "type": "object",
+          "properties": {
+            "length": { "type": "string", "default": "m" },
+            "force": { "type": "string", "default": "kN" }
+          }
+        }
+      }
+    },
+    "nodes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "x", "y", "z"],
+        "properties": {
+          "id": { "type": "integer", "minimum": 1 },
+          "x": { "type": "number" },
+          "y": { "type": "number" },
+          "z": { "type": "number" }
+        }
+      }
+    },
+    "elements": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "node_i", "node_j", "section_id"],
+        "properties": {
+          "id": { "type": "integer", "minimum": 1 },
+          "node_i": { "type": "integer", "minimum": 1 },
+          "node_j": { "type": "integer", "minimum": 1 },
+          "section_id": { "type": "string" },
+          "type": { "type": "string", "enum": ["column", "beam"] }
+        }
+      }
+    },
+    "sections": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "profile"],
+        "properties": {
+          "id": { "type": "string" },
+          "material_id": { "type": "string" },
+          "profile": { "type": "string" },
+          "A": { "type": "number" },
+          "Ix": { "type": "number" },
+          "Iy": { "type": "number" },
+          "Wx": { "type": "number" },
+          "Wy": { "type": "number" },
+          "ix": { "type": "number" },
+          "iy": { "type": "number" }
+        }
+      }
+    },
+    "materials": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "E", "fy"],
+        "properties": {
+          "id": { "type": "string" },
+          "name": { "type": "string" },
+          "E": { "type": "number" },
+          "fy": { "type": "number" },
+          "nu": { "type": "number", "default": 0.3 },
+          "density": { "type": "number" }
+        }
+      }
+    }
+  }
+}

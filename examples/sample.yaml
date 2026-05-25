@@ -1,0 +1,22 @@
+# 钢框架全流程演示 — 示例参数文件
+# 用法: python cli/main.py run --input examples/sample.yaml
+
+# —— 结构参数 ——
+grid_x: [6.0, 6.0, 6.0]       # X方向柱距 (m)
+grid_y: [6.0, 6.0]             # Y方向柱距 (m)
+num_stories: 4                  # 层数
+story_heights: [4.0, 3.5, 3.5, 3.5]  # 各层层高 (m)，首层 4m，其余 3.5m
+
+column_section: HW350x350x12x19  # 柱截面
+beam_section: HM340x250x9x14    # 梁截面
+material: Q355                   # 钢材牌号
+name: 示例办公楼                 # 项目名称
+
+# —— 荷载参数 ——
+dead_load: 2.0         # 楼面附加恒载 (kN/m²)
+live_load: 3.0         # 楼面活载 (kN/m²)
+wind_pressure: 0.45    # 基本风压 (kN/m²)
+seismic_intensity: 0.08  # 地震影响系数最大值
+
+# —— 输出 ——
+output_dir: ./output    # 结果输出目录
