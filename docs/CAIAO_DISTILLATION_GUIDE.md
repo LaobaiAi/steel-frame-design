@@ -213,6 +213,16 @@ class MyPipeline(CAIAOServer):
 
 → **无需改动 Server 内部代码，只需在外层套一层 MCP stdio transport。**
 
+### 6.1 为什么需要 CAIAO 这层抽象？为什么不直接做成 MCP Server？
+
+详细讨论见 `docs/DEVELOPMENT_MANUAL.md` 第 5.4 节「CAIAO 与 MCP 常见问答」。简要来说：
+
+- CAIAO = 内部统一工具框架（现在就被 Pipeline 编排和 CLI 调试使用）
+- MCP = 外部 AI 通信协议（仅在需要 AI 直接调用工具时才启用）
+- `run_stdio_loop()` 中的手写 JSON-RPC 循环是"协议质检"——验证 CAIAO 接口与 MCP 对齐后，将来换 MCP SDK 的 transport 即可，业务逻辑零改动。
+
+两者不是替代关系，而是**内部框架（CAIAO）+ 标准通信（MCP）**的分层设计：CAIAO 提供 `@tool` 注册、自动发现、统一调用等开发体验；MCP 提供 AI 生态的互通能力。
+
 ---
 
 ## 7. 常见陷阱与对策

@@ -200,6 +200,104 @@ report = reporter.call_tool("generate_report", ...)
 - 认证/授权层（CAIAO Hub 级别）
 - 健康检查接口
 
+### 5.4 CAIAO 与 MCP 常见问答
+
+#### Q1: CAIAO 和 MCP 有什么区别？为什么不直接做成 MCP Server？
+
+CAIAO 和 MCP 是不同层面的概念：
+
+```
+┌─────────────────────────────────┐
+│    AI 助手 (Claude Desktop 等)   │  ← 说 MCP "语言"
+├─────────────────────────────────┤
+│    MCP 协议层 (stdio transport)  │  ← 标准通信协议（AI 世界通用）
+├─────────────────────────────────┤
+│    CAIAO Server                 │  ← 你的内部架构
+│    (list_tools / call_tool)     │     统一接口、自动注册、CLI 调试
+└─────────────────────────────────┘
+```
+
+- **MCP (Model Context Protocol)** = 行业标准协议，是 AI 客户端和工具服务器之间公认的通信"语言"。类比 HTTP 之于浏览器。
+- **CAIAO Server** = 本项目的内部工具框架，提供 `@tool` 装饰器自动注册、`list_tools()`/`call_tool()` 统一接口、`run_cli()` 调试入口。这些能力**现在就在被 Pipeline 和 CLI 使用**，不依赖 MCP。
+
+如果一开始就绑 MCP SDK：
+- Pipeline 中编排 5 个 Server 需要启动子进程、走 stdio JSON-RPC → 过度工程
+- CLI 调试无法直接 `import` 调用 → 每次都要起子进程
+- 引入 MCP SDK 依赖，但当前完全用不到 AI 调用
+
+CAIAO 并非"多做了一层"，而是**你现在实际依赖的统一框架**，MCP 只是将来会追加的一种访问入口。
+
+#### Q2: `run_stdio_loop()` 那 128 行是必要的吗？
+
+本质是**协议质检垫脚石**。那 128 行手写 JSON-RPC 循环让你今天就能：
+- 手工通过 stdin/stdout 单独测试每个 Server
+- 验证 `list_tools()` 返回格式、`call_tool()` 参数传递是否与 MCP 协议对齐
+
+将来升级到 MCP SDK 时，这 128 行被 SDK 的 `stdio_server()` 替代（约 10 行），但 5 个 Server 的业务逻辑一个字不改。对比：
+
+```python
+# 现在 — 手工质检（128行）
+for line in sys.stdin:
+    request = json.loads(line)
+    if method == "list_tools":
+        response = server.list_tools()
+    elif method == "call_tool":
+        response = server.call_tool(...)
+    print(json.dumps(response))
+
+# 将来 — MCP SDK 接管（~10行）
+@mcp_server.list_tools()
+async def list_tools():
+    return [Tool(**t) for t in caiao_server.list_tools()]
+
+@mcp_server.call_tool()
+async def call_tool(name, arguments):
+    result = caiao_server.call_tool(name, arguments)
+    return [TextContent(type="text", text=json.dumps(result))]
+
+asyncio.run(stdio_server(mcp_server))
+```
+
+**质检通过 → 换标准件 → 直接用，业务逻辑不碰。**
+
+#### Q3: 将来整合到 MCP 要改多少代码？
+
+只改每个 Server 文件底部的 `__main__` 块（把 128 行手写循环换成 MCP SDK 的 `stdio_server()`），其余全部不变：
+
+| 组件 | 改动 |
+|------|------|
+| 5 个业务 Server 的业务逻辑 | **0 行** |
+| `@tool` 装饰器 | **0 行** |
+| `CAIAOServer.list_tools()` | **0 行** |
+| `CAIAOServer.call_tool()` | **0 行** |
+| Pipeline 编排代码 | **0 行** |
+| CLI 入口 | **0 行** |
+| `run_stdio_loop()` 手写循环 | **交换为 MCP SDK transport** |
+
+因为 `list_tools()` 输出格式与 MCP `tools/list` 兼容，`call_tool()` 语义与 MCP `tools/call` 一致——接口已在 CAIAO 设计阶段就对齐了 MCP 标准。
+
+#### Q4: 什么时候才真的需要 MCP？
+
+**当 AI 助手需要直接调用你的工具时。** 当前主要使用场景是：
+- CLI 批量运行：`python cli/main.py run --input sample.yaml`
+- Pipeline 进程内编排：`self._checker.call_tool("check_code", data)`
+
+这两种场景完全不需要 MCP 协议。MCP 的唯一价值在于：让外部 AI 客户端（如 Claude Desktop、CodeBuddy）通过标准协议发现并调用你的 `check_code`、`run_analysis` 等工具。
+
+当需要 AI 调用时，在 AI 客户端配置中添加一行：
+```json
+{
+  "mcpServers": {
+    "steel-code-check": {
+      "command": "python",
+      "args": ["servers/steel_code_check.py"]
+    }
+  }
+}
+```
+
+然后 AI 就能自动发现所有 `@tool` 注册的工具并调用它们。
+
 ## 6. 难点与解决方案
 
 | 难点 | 解决方案 |
