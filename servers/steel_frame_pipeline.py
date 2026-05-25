@@ -1,36 +1,75 @@
 """
 全流程编排 Server (steel_frame_pipeline)
 
-"合并 Server" 模式：不包含任何计算逻辑，只负责按顺序调用原子 Server。
+"合并 Server" 模式：不包含任何计算逻辑，只负责通过 Hub 按顺序调用原子 Server。
 体现 CAIAO 哲学：合并而非修改。
 
-从用户级参数出发，依次调用：
-  generate_frame → apply_loads → run_analysis(×4) → check_code → generate_report
+从用户级参数出发，依次通过 Hub 调用：
+  generate_frame → apply_loads → run_analysis(×N) → check_code → generate_report
+
+Hub 调度模式（v2.0）：通过 caiao_hub.Hub 统一调度，Server 间零直接依赖。
 """
 
 import os
 import json
 from servers.base import CAIAOServer, tool
-from servers.steel_frame_generator import SteelFrameGenerator
-from servers.steel_load_generator import SteelLoadGenerator
-from servers.opensees_runner import OpenSeesRunner
-from servers.steel_code_check import SteelCodeCheck
-from servers.report_generator import ReportGenerator
 
 
 class SteelFramePipeline(CAIAOServer):
     """钢框架全流程编排器。
 
-    内部实例化各原子 Server，按顺序调用，不包含任何计算逻辑。
+    通过 CAIAO Hub 调度原子 Server，本身不含任何计算逻辑。
+    若未注入 Hub，自动回退到直接实例化（向后兼容）。
     """
 
-    def __init__(self):
+    server_name = "steel-frame-pipeline"
+    server_version = "2.0.0"
+    server_category = "orchestration"
+    server_description = "钢框架全流程编排器：通过Hub依次调度建模→荷载→分析→校核→报告，一步跑通"
+    server_dependencies = []
+
+    def __init__(self, hub=None):
+        """初始化管线编排器。
+
+        Args:
+            hub: CAIAO Hub 实例（可选）。若提供，通过 Hub 调度；
+                 否则自动实例化原子 Server 直接调用（向后兼容）。
+        """
         super().__init__()
-        self._generator = SteelFrameGenerator()
-        self._loader = SteelLoadGenerator()
-        self._runner = OpenSeesRunner()
-        self._checker = SteelCodeCheck()
-        self._reporter = ReportGenerator()
+        self._hub = hub
+
+        # 若未提供 Hub，回退到直接实例化（向后兼容）
+        if self._hub is None:
+            from servers.steel_frame_generator import SteelFrameGenerator
+            from servers.steel_load_generator import SteelLoadGenerator
+            from servers.opensees_runner import OpenSeesRunner
+            from servers.steel_code_check import SteelCodeCheck
+            from servers.report_generator import ReportGenerator
+
+            self._generator = SteelFrameGenerator()
+            self._loader = SteelLoadGenerator()
+            self._runner = OpenSeesRunner()
+            self._checker = SteelCodeCheck()
+            self._reporter = ReportGenerator()
+
+    def _call(self, tool_name: str, input_data: dict) -> dict:
+        """统一的工具调用入口：优先 Hub 调度，回退直接调用。"""
+        if self._hub is not None:
+            return self._hub.call_tool(tool_name, input_data)
+        # 回退：直接调用对应的原子 Server
+        server_map = {
+            "generate_frame": ("_generator", "generate_frame"),
+            "apply_loads": ("_loader", "apply_loads"),
+            "run_analysis": ("_runner", "run_analysis"),
+            "check_code": ("_checker", "check_code"),
+            "generate_report": ("_reporter", "generate_report"),
+        }
+        if tool_name in server_map:
+            attr, actual_tool = server_map[tool_name]
+            server = getattr(self, attr, None)
+            if server:
+                return server.call_tool(actual_tool, input_data)
+        return {"error": f"Tool '{tool_name}' not available"}
 
     @tool(
         name="run_full_pipeline",
@@ -61,7 +100,7 @@ class SteelFramePipeline(CAIAOServer):
         os.makedirs(output_dir, exist_ok=True)
 
         # ── Step 1: 生成模型 ─────────────────────────────────
-        model = self._generator.call_tool("generate_frame", {
+        model = self._call("generate_frame", {
             "grid_x": input_data["grid_x"],
             "grid_y": input_data["grid_y"],
             "num_stories": input_data["num_stories"],
@@ -77,7 +116,7 @@ class SteelFramePipeline(CAIAOServer):
                        "elements": len(model["elements"])})
 
         # ── Step 2: 施加荷载 ─────────────────────────────────
-        loaded = self._loader.call_tool("apply_loads", {
+        loaded = self._call("apply_loads", {
             "model": model,
             "dead_load": input_data.get("dead_load", 1.5),
             "live_load": input_data.get("live_load", 2.0),
@@ -93,7 +132,7 @@ class SteelFramePipeline(CAIAOServer):
         analysis_results = []
         load_case_names = [lc["name"] for lc in loaded["load_cases"]]
         for lc_name in load_case_names:
-            ar = self._runner.call_tool("run_analysis", {
+            ar = self._call("run_analysis", {
                 "loaded_model": loaded,
                 "load_case_name": lc_name
             })
@@ -104,7 +143,7 @@ class SteelFramePipeline(CAIAOServer):
                            "max_disp": ar["summary"]["max_displacement"]})
 
         # ── Step 4: 规范校核 ─────────────────────────────────
-        check = self._checker.call_tool("check_code", {
+        check = self._call("check_code", {
             "model": model,
             "analysis_results": analysis_results,
         })
@@ -115,7 +154,7 @@ class SteelFramePipeline(CAIAOServer):
                        "failed": check["summary"]["failed"]})
 
         # ── Step 5: 生成报告 ─────────────────────────────────
-        report = self._reporter.call_tool("generate_report", {
+        report = self._call("generate_report", {
             "check_results": check,
             "model_meta": {
                 "name": input_data.get("name", "Steel Frame"),
