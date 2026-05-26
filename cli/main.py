@@ -157,10 +157,14 @@ def main():
     orchestrator = CliOrchestrator(hub)
     hub.register(orchestrator)
 
-    # 注册 LLM Agent Loop（需要 hub）
-    from servers.llm_agent_loop import LLMAgentLoop
-    agent_loop = LLMAgentLoop(hub)
-    hub.register(agent_loop)
+    # 注册需要 hub 引用的 Server（覆盖自动发现的 hub=None 实例）
+    from servers.llm_agent_orchestrator import LLMAgentOrchestrator
+    from servers.llm_param_extractor import LLMParamExtractor
+
+    agent_orch = LLMAgentOrchestrator(hub)
+    param_extractor = LLMParamExtractor(hub)
+    hub.register(agent_orch)
+    hub.register(param_extractor)  # 覆盖自动发现的实例，使提取器可通过 Hub 调 llm_gateway
 
     print_step(f"Hub 就绪: {hub.get_server_count()} Server, {hub.get_tool_count()} 工具")
 
