@@ -13,6 +13,7 @@ dist/
 build/
 .eggs/
 .venv/
+.venv_opensees/
 venv/
 env/
 
@@ -21,6 +22,10 @@ dev-notes/
 
 # Output (runtime results)
 output/
+
+# AI Assistant
+.firecrawl/
+memory/
 
 # Misc
 $null
