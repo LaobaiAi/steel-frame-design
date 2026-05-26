@@ -124,7 +124,9 @@ This project enforces **[Conventional Commits 1.0.0](https://www.conventionalcom
 | `pipeline` | Pipeline orchestrator (`servers/steel_frame_pipeline.py`) |
 | `cli` | CLI entry point (`cli/main.py`) |
 | `schema` | JSON Schema definitions (`schemas/`) |
-| `caiao` | CAIAO base class or protocol (`servers/base.py`) |
+| `caiao` | CAIAO base class, Hub, or protocol (`servers/base.py`, `caiao_hub.py`) |
+| `llm` | LLM gateway, agent, and param extractor servers |\n| `api` | Web API server (`servers/web_api_server.py`) |
+| `frontend` | React frontend application (`frontend/`) |
 | `docs` | Documentation (README, CONTRIBUTING, etc.) |
 | `ci` | GitHub Actions, CI/CD |
 

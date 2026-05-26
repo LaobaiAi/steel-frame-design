@@ -1,187 +1,146 @@
-# LLM 集成指南
+# LLM 集成指南（v2.0 CAIAO 化改造）
 
-> 本文档说明 Steel Frame Design v2.0 中的两个 LLM 集成层面的使用方法与配置。
-
----
-
-## 概述
-
-v2.0 提供了两个 LLM 集成层面：
-
-| 层面 | Server | 说明 |
-|------|--------|------|
-| **参数提取层** | `llm_param_extractor.py` | 将自然语言描述转为结构化设计参数 YAML |
-| **Agent 自主编排层** | `llm_agent_loop.py` | LLM 自主发现工具、规划步骤、执行全流程 |
-
-两层均可通过 CLI 调用，也可通过 Hub 编程式调用。
+> 本文档说明 Steel Frame Design v2.0 CAIAO 化后的 LLM 集成架构与使用方法。
 
 ---
 
-## 1. LLM 参数提取模式
+## 架构概览
 
-### 使用场景
-用户用自然语言描述设计需求（如"设计一个三层钢结构办公楼"），系统自动提取参数并执行全流程。
+CAIAO 化改造的核心变化：将 LLM 通信抽象为原子 Server `llm_gateway`，所有需要 LLM 能力的 Server 通过 Hub 调用它，不再直接发 HTTP 请求。
+
+```
+改造前：                          改造后（CAIAO 化）：
+
+LLMParamExtractor                  LLMParamExtractor (纯计算)
+  └── _call_llm() → requests.post    └── Hub → llm_gateway → LLM API
+
+LLMAgentLoop                       LLMAgentOrchestrator (合并 Server)
+  └── _call_llm() → requests.post    └── Hub → llm_gateway → LLM API
+    └── Hub → 其他工具                  └── Hub → 其他工具
+
+                                     llm_gateway (原子 Server) ★
+                                       └── chat_completion() / stream_chat()
+                                       └── 唯一包含网络逻辑的 Server
+                                       └── API Key 优先从环境变量读取
+```
+
+### 三层架构
+
+| 层 | Server | 类别 | 职责 |
+|---|--------|------|------|
+| **通信层** | `llm_gateway.py` | 原子 Server | **唯一**发 HTTP 请求的 Server。提供 `chat_completion`（非流式）和 `stream_chat`（流式） |
+| **计算层** | `llm_param_extractor.py` | 原子 Server | 纯计算：JSON 解析、Schema 校验、默认值填充。通过 Hub → `llm_gateway` 获取 LLM 输出 |
+| **编排层** | `llm_agent_orchestrator.py` | 合并 Server | 纯编排：ReAct 循环，通过 Hub 动态发现工具，通过 Hub → `llm_gateway` 获取 LLM 响应 |
+
+---
+
+## 1. 环境变量配置
+
+CAIAO 化后，API Key 优先从服务端环境变量读取，前端配置作为可选覆盖：
+
+```bash
+# 服务端环境变量（推荐）
+export LLM_API_KEY=sk-your-api-key
+export LLM_BASE_URL=https://api.openai.com/v1    # 可选，默认值
+export LLM_MODEL=gpt-4o-mini                      # 可选，默认值
+```
+
+配置优先级：**环境变量 > 前端传入 > 默认值**
+
+---
+
+## 2. LLM 参数提取模式
+
+LLM Server 调用链路：
+
+```
+用户文本 → Hub.call_tool("extract_params_from_text", ...)
+         → LLMParamExtractor.extract_params_from_text()
+         → Hub.call_tool("chat_completion", messages, ...)
+         → LLMGateway.chat_completion() → requests.post → LLM API
+         → JSON 解析（纯计算）
+         → 默认值填充（纯计算）
+         → 结构化参数
+```
 
 ### CLI 调用
 
 ```bash
+# API Key 来自环境变量
 python cli/main.py run --mode llm-param \
-  --prompt "设计一个三层钢框架办公楼，柱距6米，每层3.5米高，Q355钢材" \
-  --api-key sk-your-api-key \
+  --prompt "设计一个三层钢框架办公楼，柱距6米"
+
+# 或手动传入（作为环境变量覆盖）
+python cli/main.py run --mode llm-param \
+  --prompt "设计一个三层钢框架办公楼，柱距6米" \
+  --api-key sk-xxx \
   --model gpt-4o-mini
 ```
 
-### 编程式调用
-
-```python
-from caiao_hub import Hub
-from servers.llm_param_extractor import LLMParamExtractor
-from servers.cli_orchestrator import CliOrchestrator
-
-hub = Hub()
-hub.register(LLMParamExtractor())
-hub.register(CliOrchestrator(hub))
-
-result = hub.call_tool("run_cli_command", {
-    "mode": "llm-param",
-    "prompt": "设计一个三层钢框架办公楼，6米柱距，Q355钢",
-    "llm_config": {
-        "api_key": "sk-xxx",
-        "model": "gpt-4o-mini"
-    }
-})
-```
-
-### 参数提取 System Prompt
-
-提取器使用预定义的 System Prompt，指导 LLM 输出严格的 JSON 格式。支持的参数包括：
-- `grid_x`, `grid_y` — 柱距
-- `num_stories`, `story_heights` — 层数、层高
-- `column_section`, `beam_section` — 截面选型
-- `material` — 材料 (Q235/Q355)
-- `dead_load`, `live_load`, `wind_pressure`, `seismic_intensity` — 荷载
-
-### 错误处理
-- LLM API 不可达 → 返回 `{"error": "LLM API call failed: ..."}`
-- JSON 解析失败 → 尝试提取 `{` 到 `}` 之间的内容
-- API key 未提供 → 返回 `{"error": "LLM API key is required"}`
-
 ---
 
-## 2. LLM Agent 自主编排模式
+## 3. LLM Agent 自主编排模式
 
-### 使用场景
-LLM 作为 Agent，自主发现所有可用工具，规划执行步骤，通过 ReAct 循环完成钢框架设计全流程。**Agent 自己决定何时调用哪个工具**。
+Agent 调用链路：
+
+```
+用户描述 → Hub.call_tool("execute_with_llm", ...)
+         → LLMAgentOrchestrator.execute()
+         → Hub.list_all_tools() 动态发现工具
+         → Hub.call_tool("chat_completion", messages, tools, ...)
+         → LLMGateway → LLM API（返回 tool_calls）
+         → Hub.call_tool(tool_name, args) 执行原子 Server
+         → 智能摘要结果 → 下一轮 ReAct
+```
 
 ### CLI 调用
 
 ```bash
 python cli/main.py run --mode llm-agent \
-  --prompt "设计一个两层钢框架，用Q235钢，校核所有荷载工况，并生成报告" \
-  --api-key sk-your-api-key \
-  --model gpt-4o
+  --prompt "设计一个两层钢框架，用Q235钢，校核所有荷载工况，并生成报告"
 ```
-
-### 编程式调用
-
-```python
-from caiao_hub import Hub
-from servers.llm_agent_loop import LLMAgentLoop
-
-hub = Hub()
-agent = LLMAgentLoop(hub)
-hub.register(agent)
-
-result = hub.call_tool("execute_with_llm", {
-    "prompt": "设计一个两层钢框架...",
-    "llm_config": {"api_key": "sk-xxx", "model": "gpt-4o"},
-    "max_iterations": 10
-})
-
-# 查看执行步骤
-for step in result["steps"]:
-    print(step)
-```
-
-### ReAct 循环
-
-```
-User Prompt → LLM 规划 →
-  [tool_call: generate_frame] → 结果反馈 →
-  [tool_call: apply_loads]    → 结果反馈 →
-  [tool_call: run_analysis]   → 结果反馈 →
-  [tool_call: check_code]     → 结果反馈 →
-  [tool_call: generate_report] → 结果反馈 →
-LLM 最终回复（总结设计结果）
-```
-
-### 安全限制
-- 最大迭代次数：默认 10 次（可配 `max_iterations`），防止死循环
-- 每次只执行一个 `tool_call`
-- 工具调用失败会反馈给 LLM，Agent 可尝试修复
-
-### Agent System Prompt
-
-Agent 内置 System Prompt 描述：
-- 所有可用工具及其功能
-- 推荐的执行顺序
-- 错误处理策略
 
 ---
 
-## 3. LLM 后端配置
+## 4. 流式对话（SSE）
 
-### 支持的 LLM 后端
-
-使用 OpenAI 兼容 API 接口，支持：
-
-| 后端 | base_url | model 示例 |
-|------|----------|-----------|
-| OpenAI | 默认 (https://api.openai.com/v1) | gpt-4o, gpt-4o-mini |
-| Azure OpenAI | https://xxx.openai.azure.com | gpt-4 |
-| 本地模型 (vLLM/Ollama) | http://localhost:8000/v1 | llama3 |
-| 其他兼容提供商 | 自定义 | 自定义 |
-
-### 配置方式
-
-**方式一：CLI 参数**
+新的 SSE 端点允许前端实时接收 LLM 响应：
 
 ```bash
-python cli/main.py run --mode llm-agent \
-  --prompt "..." \
-  --api-key sk-xxx \
-  --model gpt-4o-mini \
-  --base-url https://api.openai.com/v1
+curl -X POST http://localhost:8000/api/llm/stream \
+  -H "Content-Type: application/json" \
+  -d '{
+    "messages": [
+      {"role": "system", "content": "你是一个结构工程师"},
+      {"role": "user", "content": "设计一个三层办公楼"}
+    ]
+  }'
+
+# 响应（SSE 格式）：
+# data: {"type": "token", "content": "好的"}
+# data: {"type": "token", "content": "，"}
+# data: {"type": "done"}
 ```
-
-**方式二：环境变量**
-
-```bash
-export OPENAI_API_KEY=sk-xxx
-python cli/main.py run --mode llm-agent --prompt "..." --model gpt-4o-mini
-```
-
-CLI 会自动读取 `OPENAI_API_KEY` 环境变量。
 
 ---
 
-## 4. 两种模式的对比
+## 5. 与 v1.x 的关键区别
 
-| 特性 | llm-param (参数提取) | llm-agent (Agent编排) |
-|------|---------------------|----------------------|
-| 调用 LLM 次数 | 1 次 | N 次 (ReAct循环) |
-| LLM 角色 | 文本 → 参数 JSON | 自主规划 + 工具调用 |
-| 是否了解工具 | 否 | 是（通过 Hub 获取工具列表） |
-| 适用场景 | 快速参数化 | 探索性设计、复杂需求 |
-| 推荐模型 | gpt-4o-mini | gpt-4o |
-| Token 消耗 | 低 (~500 tokens) | 中 (~2000-5000 tokens) |
+| 特性 | v1.x | v2.0 CAIAO 化 |
+|------|------|----------------|
+| LLM 通信 | 每个 Server 各自 `requests.post` | 统一经 `llm_gateway` |
+| API Key | 必须通过前端/CLI 传入 | 优先环境变量，前端可选覆盖 |
+| 参数提取器 | 直接调 LLM API + 解析 | 纯计算，通过 Hub 调 `llm_gateway` |
+| Agent 循环 | `llm_agent_loop.py` | `llm_agent_orchestrator.py`（合并 Server） |
+| 流式响应 | 不支持 | SSE (`POST /api/llm/stream`) |
+| 工具结果回传 | 完整 JSON | 智能摘要（节省 80-90% Token） |
+| 测试 | 无网络依赖隔离 | 纯计算测试 + 网关元数据测试 |
 
 ---
 
-## 5. 注意事项
+## 6. 注意事项
 
-1. **API Key 安全**: 不要在代码中硬编码 API Key，使用环境变量或 CLI 参数
-2. **网络依赖**: LLM 模式需要网络连接到 API 端点
-3. **限流处理**: 连续多次 Agent 调用可能触发 API 限流
-4. **工程模式优先**: 如有明确的 YAML 参数文件，优先使用工程模式（无需 LLM，更快更可靠）
-5. **Agent 模式推荐模型**: 建议使用 gpt-4o 或同等能力模型，低能力模型可能无法正确编排多步骤任务
+1. **API Key 安全**：优先通过服务端环境变量 `LLM_API_KEY` 配置，避免在前端代码中硬编码
+2. **环境变量优先级**：`LLM_API_KEY` > 前端 `api_key` 参数 > 无（返回错误）
+3. **llm_gateway 是唯一网络入口**：所有 LLM 调用必须通过此 Server，新增功能也需遵循此约束
+4. **Agent 编排器不自带网络**：作为合并 Server，它只编排不通信，LLM 调用委托给 `llm_gateway`

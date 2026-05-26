@@ -14,11 +14,11 @@ v2.0 完成了从"CAIAO 使用者"到"CAIAO 标准参考实现"的架构升级�
 | 组件 | 路径 | 说明 |
 |------|------|------|
 | **CAIAO Hub** | `caiao_hub.py` | 轻量调度中心：自动发现、工具注册、路由代理 |
+| **LLM 通信网关** | `servers/llm_gateway.py` | 原子 Server：唯一网络通信层，提供 chat_completion / stream_chat |
+| **LLM 参数提取器** | `servers/llm_param_extractor.py` | 原子 Server：纯计算，通过 Hub 调 llm_gateway |
+| **LLM Agent 编排器** | `servers/llm_agent_orchestrator.py` | 合并 Server：纯编排，通过 Hub 动态发现工具并编排全流程 |
 | **3D 导出器** | `servers/three_d_exporter.py` | 将模型导出为 Three.js 可渲染的 3D JSON |
-| **LLM 参数提取器** | `servers/llm_param_extractor.py` | 自然语言 → 设计参数 YAML |
-| **LLM Agent 循环** | `servers/llm_agent_loop.py` | ReAct 循环：LLM 自主发现工具并编排全流程 |
 | **CLI 编排器** | `servers/cli_orchestrator.py` | 三种模式统一入口 (engineering/llm-param/llm-agent) |
-| **前端 3D 可视化** | `frontend/` | Three.js 钢框架 3D 查看器 |
 | **CAIAO 规范** | `specs/CAIAO_SERVER_V1.md` | Server 标准契约文档 |
 | **3D 数据 Schema** | `schemas/three_d_data.schema.json` | 3D 数据接口格式 |
 
@@ -95,11 +95,31 @@ cd frontend && python -m http.server 8000
                                           │  Code Check              │
                                           │  check_code (per element) │
                                           └─────────────┬────────────┘
-                                                        │
                                           ┌─────────────▼────────────┐
                                           │  Report Generator        │
                                           │  generate_report → HTML  │
                                           └──────────────────────────┘
+
+  LLM 子系统（CAIAO 化三层架构）：
+
+  ┌──────────────────────────────────────────────────────────────┐
+  │  编排层                                                      │
+  │  LLMAgentOrchestrator (合并 Server)                           │
+  │  纯编排：ReAct 循环，通过 Hub 调工具，不自含网络逻辑            │
+  └──────────────────────────┬───────────────────────────────────┘
+                             │ Hub.call_tool("chat_completion", ...)
+  ┌──────────────────────────▼───────────────────────────────────┐
+  │  计算层                                                      │
+  │  LLMParamExtractor (原子 Server)                              │
+  │  纯计算：JSON 解析、校验、默认值填充，不包含网络逻辑             │
+  └──────────────────────────┬───────────────────────────────────┘
+                             │ Hub.call_tool("chat_completion", ...)
+  ┌──────────────────────────▼───────────────────────────────────┐
+  │  通信层                                                      │
+  │  LLMGateway (原子 Server) ★                                   │
+  │  唯一网络层：chat_completion() / stream_chat()                │
+  │  API Key 从环境变量 LLM_API_KEY 读取                          │
+  └──────────────────────────────────────────────────────────────┘
 
   数据流: JSON → JSON → JSON → JSON → JSON → HTML
 ```
