@@ -92,6 +92,16 @@ class SteelLoadGenerator(CAIAOServer):
         elements = model["elements"]
 
         # ── 确定网格参数 ─────────────────────────────────────
+        # 从节点坐标推算实际柱距（用于从属宽度）
+        x_coords = sorted(set(n["x"] for n in nodes))
+        y_coords = sorted(set(n["y"] for n in nodes))
+        grid_spacing_x = [x_coords[i+1] - x_coords[i] for i in range(len(x_coords)-1)]
+        grid_spacing_y = [y_coords[i+1] - y_coords[i] for i in range(len(y_coords)-1)]
+        avg_spacing_x = sum(grid_spacing_x) / len(grid_spacing_x) if grid_spacing_x else 6.0
+        avg_spacing_y = sum(grid_spacing_y) / len(grid_spacing_y) if grid_spacing_y else 6.0
+        tributary_x = avg_spacing_x / 2  # 双向板，每根梁分担一半跨度
+        tributary_y = avg_spacing_y / 2
+
         max_x = max(n["x"] for n in nodes)
         max_y = max(n["y"] for n in nodes)
         max_z = max(n["z"] for n in nodes)
@@ -118,21 +128,17 @@ class SteelLoadGenerator(CAIAOServer):
 
         # ── 荷载工况 1: 恒载 (Dead Load) ──────────────────────
         dead_loads = []
-        # 楼面恒载转换为梁上线荷载
-        # 简化：按从属面积分配到各层梁上
         for el in elements:
             if el["type"] == "beam":
                 node_i = next(n for n in nodes if n["id"] == el["node_i"])
                 node_j = next(n for n in nodes if n["id"] == el["node_j"])
                 z = node_i["z"]
                 if z > 0.001:
-                    # 判断是否为屋面
-                    is_roof = abs(z - max_z) < 0.01
-                    dl = roof_live if is_roof else dead
-                    length = ((node_j["x"]-node_i["x"])**2 + (node_j["y"]-node_i["y"])**2 + (node_j["z"]-node_i["z"])**2)**0.5
-                    # 楼面恒载传到梁上的线荷载近似：dl * 从属宽度 / 2（双向板各分担一半）
-                    tributary = 3.0  # 简化从属宽度 3m（适用于 6m 柱距）
-                    ql = dl * tributary
+                    # 恒载对屋面/楼面相同；按梁方向取对应从属宽度
+                    dx = abs(node_j["x"] - node_i["x"])
+                    dy = abs(node_j["y"] - node_i["y"])
+                    tributary = tributary_y if dx > dy else tributary_x
+                    ql = dead * tributary
                     dead_loads.append({
                         "element_id": el["id"],
                         "type": "uniform",
@@ -145,11 +151,15 @@ class SteelLoadGenerator(CAIAOServer):
         for el in elements:
             if el["type"] == "beam":
                 node_el = next(n for n in nodes if n["id"] == el["node_i"])
+                node_j = next(n for n in nodes if n["id"] == el["node_j"])
                 z = node_el["z"]
                 if z > 0.001:
                     is_roof = abs(z - max_z) < 0.01
                     ll = roof_live if is_roof else live
-                    ql = ll * 3.0  # 简化从属宽度
+                    dx = abs(node_j["x"] - node_el["x"])
+                    dy = abs(node_j["y"] - node_el["y"])
+                    tributary = tributary_y if dx > dy else tributary_x
+                    ql = ll * tributary
                     live_loads.append({
                         "element_id": el["id"],
                         "type": "uniform",
@@ -165,43 +175,43 @@ class SteelLoadGenerator(CAIAOServer):
         # ── 荷载工况 3: 风荷载 (Wind) ─────────────────────────
         if include_wind:
             wind_loads = []
-            # 简化：风荷载转为各层楼面处的水平集中力
+            # 简化：风荷载转为各层楼面处的水平集中力，均分给该层所有框架节点
             for i, z in enumerate(z_levels):
-                story_h = z_levels[i] - (z_levels[i-1] if i > 0 else 0)
-                wind_area = max_y * story_h  # Y向迎风面
-                wind_force = wind_p * 1.3 * 1.0 * wind_area  # βz*μs*μz*w0*A
-                # 找到该层 X 最小侧的所有节点施加 X 方向力
-                for n in nodes:
-                    if abs(n["z"] - z) < 0.01 and abs(n["x"]) < 0.01:
-                        wind_loads.append({
-                            "element_id": None,
-                            "node_id": n["id"],
-                            "type": "point",
-                            "direction": "global_x",
-                            "values": {"Px": wind_force}
-                        })
+                story_h_upper = z_levels[i] - (z_levels[i-1] if i > 0 else 0)
+                story_h_lower = (z_levels[i+1] - z) if i < len(z_levels) - 1 else story_h_upper
+                story_h = (story_h_upper + story_h_lower) / 2
+                wind_area = max_y * story_h
+                wind_force = wind_p * 1.3 * 1.0 * wind_area
+                # 均分给该层所有节点
+                level_nodes = [n for n in nodes if abs(n["z"] - z) < 0.01]
+                force_per_node = wind_force / len(level_nodes) if level_nodes else 0
+                for n in level_nodes:
+                    wind_loads.append({
+                        "node_id": n["id"],
+                        "type": "point",
+                        "direction": "global_x",
+                        "values": {"Px": force_per_node}
+                    })
             load_cases.append({"name": "Wind", "description": "风荷载（X方向）", "loads": wind_loads})
 
         # ── 荷载工况 4: 地震 (Seismic) ────────────────────────
         if include_seismic:
             seismic_loads = []
-            # 底部剪力法简化
             total_weight = sum(weight_per_floor for _ in range(num_stories - 1)) + roof_weight
-            base_shear = seismic * 0.85 * total_weight  # αmax * 等效总重力荷载
-            # 按高度分配
+            base_shear = seismic * 0.85 * total_weight
             z_weight = [(z, weight_per_floor) for z in z_levels[:-1]] + [(z_levels[-1], roof_weight)]
             total_moment = sum(z * w for z, w in z_weight)
             for z, w in z_weight:
                 fi = base_shear * (z * w) / total_moment if total_moment > 0 else 0
-                for n in nodes:
-                    if abs(n["z"] - z) < 0.01 and abs(n["x"]) < 0.01:
-                        seismic_loads.append({
-                            "element_id": None,
-                            "node_id": n["id"],
-                            "type": "point",
-                            "direction": "global_x",
-                            "values": {"Px": fi}
-                        })
+                level_nodes = [n for n in nodes if abs(n["z"] - z) < 0.01]
+                force_per_node = fi / len(level_nodes) if level_nodes else 0
+                for n in level_nodes:
+                    seismic_loads.append({
+                        "node_id": n["id"],
+                        "type": "point",
+                        "direction": "global_x",
+                        "values": {"Px": force_per_node}
+                    })
 
             load_cases.append({"name": "Seismic", "description": "地震作用（X方向，底部剪力法）", "loads": seismic_loads})
 
