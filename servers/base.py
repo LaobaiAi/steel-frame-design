@@ -63,6 +63,14 @@ class CAIAOServer:
     server_description: str = ""
     server_dependencies: list[str] = []
 
+    # ── 运行模式 ────────────────────────────────────────────────
+    # "orchestration"  — 非计算型，主进程内直调，稳定无隔离需求
+    # "computational"  — 计算型，建议独立子进程运行，崩溃不牵连主进程
+    server_type: str = "orchestration"
+
+    # 标记此 Server 应作为独立子进程运行（Hub 自动跳过扫描）
+    _caiao_subprocess: bool = False
+
     def __init__(self):
         self._tools: dict[str, Callable] = {}
         self._tool_specs: list[dict] = []
@@ -121,11 +129,17 @@ class CAIAOServer:
     def run_stdio_loop(self):
         """启动 stdio JSON 循环，通过标准输入输出与外部通信。
 
-        协议（轻量版）：
+        协议（轻量版，兼容 MCP 心智模型）：
         - 输入：每行一个 JSON，格式 {"method": "...", "params": {...}, "id": ...}
-        - 输出：每行一个 JSON 响应
+        - 输出：每行一个 JSON 响应，格式 {"id": ..., "result": ...}
+        - 方法: list_tools, call_tool, get_metadata
+
+        用法（子进程模式）:
+            python -u -m servers.my_server
         """
-        print(f"[{self.__class__.__name__}] stdio loop started", file=sys.stderr)
+        name = self.__class__.__name__
+        sys.stderr.write(f"[{name}] CAIAO stdio loop started (type={self.server_type})\n")
+        sys.stderr.flush()
         for line in sys.stdin:
             line = line.strip()
             if not line:
@@ -149,7 +163,9 @@ class CAIAOServer:
 
                 print(json.dumps(response, ensure_ascii=False), flush=True)
             except Exception as e:
-                print(json.dumps({"error": str(e)}, ensure_ascii=False), flush=True)
+                sys.stderr.write(f"[{name}] Error: {e}\n")
+                sys.stderr.flush()
+                print(json.dumps({"id": req_id, "error": str(e)}, ensure_ascii=False), flush=True)
 
     # ── 调试入口：从命令行参数直接调用 ──────────────────────────
 
