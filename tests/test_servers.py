@@ -2,7 +2,7 @@
 
 测试覆盖：
 - 原子 Server (5 个): 建模、荷载、分析、校核、报告
-- 新 Server (v2.0): 3D导出、LLM参数提取(无网络)、LLM Agent(无网络)
+- 新 Server (v2.0+): 3D导出、llm-gateway(元数据)、LLM参数提取(纯计算)、LLM Agent编排(纯编排)
 - CAIAO Hub: 自动发现、工具路由
 - Pipeline: 直接模式 + Hub 调度模式
 - get_metadata(): 所有 Server 元数据验证
@@ -185,14 +185,15 @@ def test_get_metadata():
     from servers.steel_frame_pipeline import SteelFramePipeline
     from servers.three_d_exporter import ThreeDExporter
     from servers.llm_param_extractor import LLMParamExtractor
-    from servers.llm_agent_loop import LLMAgentLoop
+    from servers.llm_agent_orchestrator import LLMAgentOrchestrator
+    from servers.llm_gateway import LLMGateway
     from servers.cli_orchestrator import CliOrchestrator
 
     all_servers = [
         SteelFrameGenerator(), SteelLoadGenerator(), OpenSeesRunner(),
         SteelCodeCheck(), ReportGenerator(), SteelFramePipeline(),
-        ThreeDExporter(), LLMParamExtractor(), LLMAgentLoop(),
-        CliOrchestrator(),
+        ThreeDExporter(), LLMParamExtractor(), LLMAgentOrchestrator(),
+        LLMGateway(), CliOrchestrator(),
     ]
     for s in all_servers:
         meta = s.get_metadata()
@@ -304,6 +305,83 @@ def test_cli_orchestrator():
     assert eng_result.get("status") == "completed"
 
 
+# ── v2.0 CAIAO 化 LLM 层测试 ──────────────────────────────────────
+
+def test_llm_gateway_metadata():
+    """测试 llm-gateway 元数据和工具列表（纯计算，无网络）"""
+    from servers.llm_gateway import LLMGateway
+    gateway = LLMGateway()
+
+    # 元数据
+    meta = gateway.get_metadata()
+    assert meta["name"] == "llm-gateway"
+    assert meta["category"] == "ai_interface"
+    assert meta["compatibility"]["caiao_spec"] == "1.0"
+
+    # 工具有两个：chat_completion + stream_chat
+    tools = gateway.list_tools()
+    assert len(tools) >= 2
+    tool_names = {t["name"] for t in tools}
+    assert "chat_completion" in tool_names
+    assert "stream_chat" in tool_names
+
+    # 验证 input_schema 完备
+    for t in tools:
+        assert "description" in t
+        assert "inputSchema" in t
+        assert t["inputSchema"]["type"] == "object"
+
+
+def test_llm_gateway_no_api_key():
+    """测试 llm-gateway 在无 API Key 时返回明确的错误"""
+    from servers.llm_gateway import LLMGateway
+    gateway = LLMGateway()
+
+    # 不设环境变量，不传入 api_key
+    result = gateway.call_tool("chat_completion", {
+        "messages": [{"role": "user", "content": "hello"}],
+    })
+    assert "error" in result
+    assert "API key" in result["error"]
+
+
+def test_llm_param_extractor_pure_computation():
+    """测试 llm-param-extractor 在无 Hub 时返回合理的错误（纯计算 Server 校验）"""
+    from servers.llm_param_extractor import LLMParamExtractor
+    extractor = LLMParamExtractor()  # hub=None
+
+    result = extractor.call_tool("extract_params_from_text", {
+        "prompt": "test",
+    })
+    # 因为 hub=None，应提示需要 Hub
+    assert "error" in result
+    assert "Hub" in result["error"]
+
+
+def test_llm_agent_orchestrator_metadata():
+    """测试 llm-agent-orchestrator 元数据（纯编排 Server）"""
+    from servers.llm_agent_orchestrator import LLMAgentOrchestrator
+    orch = LLMAgentOrchestrator()
+
+    meta = orch.get_metadata()
+    assert meta["name"] == "llm-agent-orchestrator"
+    assert meta["category"] == "orchestration"
+    assert len(meta["tools"]) == 1
+    assert meta["tools"][0]["name"] == "execute_with_llm"
+
+
+def test_llm_agent_orchestrator_no_hub():
+    """测试 llm-agent-orchestrator 在无 Hub 时返回错误"""
+    from servers.llm_agent_orchestrator import LLMAgentOrchestrator
+    orch = LLMAgentOrchestrator()  # hub=None
+
+    result = orch.call_tool("execute_with_llm", {
+        "prompt": "test",
+    })
+    assert "error" in result
+    assert "Hub" in result["error"]
+
+
 if __name__ == "__main__":
     tests = [
         test_frame_generator, test_load_generator, test_runner,
@@ -312,6 +390,10 @@ if __name__ == "__main__":
         test_get_metadata, test_hub_auto_discover, test_hub_call_tool,
         test_hub_invalid_tool, test_3d_export, test_pipeline_through_hub,
         test_cli_orchestrator,
+        # v2.0 CAIAO 化 LLM 层测试
+        test_llm_gateway_metadata, test_llm_gateway_no_api_key,
+        test_llm_param_extractor_pure_computation,
+        test_llm_agent_orchestrator_metadata, test_llm_agent_orchestrator_no_hub,
     ]
     passed = 0
     for t in tests:
