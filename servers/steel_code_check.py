@@ -156,25 +156,98 @@ class SteelCodeCheck(CAIAOServer):
         analysis_results = input_data["analysis_results"]
         load_case_name = input_data.get("load_case_name", "Dead")
 
-        params = {
-            "slenderness_limit": input_data.get("slenderness_limit", 150),
-            "deflection_limit": 6.0 / input_data.get("deflection_limit_ratio", 250),
-        }
+        deflection_limit_ratio = input_data.get("deflection_limit_ratio", 250)
+        slenderness_limit = input_data.get("slenderness_limit", 150)
 
         sects = {s["id"]: s for s in model["sections"]}
         mats = {m["id"]: m for m in model["materials"]}
         nodes = model["nodes"]
         node_coords = {n["id"]: (n["x"], n["y"], n["z"]) for n in nodes}
 
-        # 合并所有工况结果
-        all_forces = {}
+        z_set = sorted(set(round(n["z"], 3) for n in nodes))
+        z_levels = [z for z in z_set if z > 0.01]
+
+        def get_story(el_type: str, ni_z: float, nj_z: float, dx: float, dy: float) -> int:
+            """确定构件所属楼层（1-based）。
+
+            楼层约定：
+              z_levels[0] = 2层楼面标高, z_levels[1] = 3层楼面标高, ...
+              1层 = 地面(z=0) 到 z_levels[0]
+              柱属底部所在楼层的上一层（柱底在 z_levels[i] 属 i+2 层），
+              梁属梁面所在实际楼层（梁面在 z_levels[i] 属 i+1 层）
+            """
+            if el_type == "column":
+                ref_z = min(ni_z, nj_z)  # 柱底标高
+            else:
+                ref_z = max(ni_z, nj_z)  # 梁面标高
+
+            if ref_z < 0.01:
+                return 1
+            for idx, zl in enumerate(z_levels):
+                if abs(ref_z - zl) < 0.3:
+                    if el_type == "column":
+                        return idx + 2  # 柱底在 z_levels[idx] → 属 idx+2 层
+                    return idx + 1      # 梁面在 z_levels[idx] → 属 idx+1 层
+            # 不在任何层标高处，找最近标高推算
+            for idx, zl in enumerate(z_levels):
+                if ref_z < zl:
+                    return idx + 1
+            return len(z_levels)
+
+        def get_element_label(el_type: str, dx: float, dy: float) -> str:
+            """返回构件类型的中文标签。"""
+            if el_type == "column":
+                return "柱"
+            if dx > dy:
+                return "X向梁"
+            return "Y向梁"
+
+        # 分工况收集内力（保留符号，不取绝对值）
+        force_keys = ["N", "Vy", "Vz", "T", "My", "Mz"]
+        forces_by_case: dict[str, dict[str, dict[str, float]]] = {}
         for ar in analysis_results:
+            lc_name = ar.get("load_case", ar.get("name", "unknown"))
             if "element_forces" in ar:
-                for eid, forces in ar["element_forces"].items():
-                    if eid not in all_forces:
-                        all_forces[eid] = {"N": 0, "Vy": 0, "Vz": 0, "T": 0, "My": 0, "Mz": 0}
-                    for k in all_forces[eid]:
-                        all_forces[eid][k] += abs(forces.get(k, 0))
+                for eid, fvals in ar["element_forces"].items():
+                    forces_by_case.setdefault(lc_name, {}).setdefault(eid, {k: 0.0 for k in force_keys})
+                    for k in force_keys:
+                        forces_by_case[lc_name][eid][k] += fvals.get(k, 0.0)
+
+        # GB50017 荷载组合（简化）:
+        # Combo1: 1.3*D + 1.5*L
+        # Combo2: 1.3*D + 1.5*W
+        # Combo3: 1.3*D + 1.5*L + 0.9*W
+        # Combo4: 1.3*D + 1.3*S  (地震简化)
+        # Combo5: 1.0*D + 1.5*W  (风吸力)
+
+        def get_case_forces(case_name: str, elem_id: str) -> dict[str, float]:
+            return forces_by_case.get(case_name, {}).get(elem_id, {k: 0.0 for k in force_keys})
+
+        def combine_for_element(elem_id: str, coeffs: list[tuple[float, str]]) -> dict[str, float]:
+            result = {k: 0.0 for k in force_keys}
+            for factor, case_name in coeffs:
+                cf = get_case_forces(case_name, elem_id)
+                for k in force_keys:
+                    result[k] += factor * cf[k]
+            return result
+
+        # 对每个构件取各组合的最大绝对值（包络设计）
+        all_forces = {}
+        for el in model["elements"]:
+            eid = str(el["id"])
+            combos = [
+                combine_for_element(eid, [(1.3, "Dead"), (1.5, "Live")]),
+                combine_for_element(eid, [(1.3, "Dead"), (1.5, "Wind")]),
+                combine_for_element(eid, [(1.3, "Dead"), (1.5, "Live"), (0.9, "Wind")]),
+                combine_for_element(eid, [(1.3, "Dead"), (1.3, "Seismic")]),
+                combine_for_element(eid, [(1.0, "Dead"), (1.5, "Wind")]),
+            ]
+            env = {k: 0.0 for k in force_keys}
+            for combo in combos:
+                for k in force_keys:
+                    if abs(combo[k]) > abs(env[k]):
+                        env[k] = combo[k]
+            all_forces[eid] = env
 
         elements_results = []
         passed_count = 0
@@ -196,8 +269,21 @@ class SteelCodeCheck(CAIAOServer):
 
             forces = all_forces.get(str(el["id"]), {"N": 0, "Vy": 0, "Vz": 0, "T": 0, "My": 0, "Mz": 0})
 
-            check_result = self._check_element(el, forces, sec, mat, length, params)
+            dx = abs(nj[0] - ni[0])
+            dy = abs(nj[1] - ni[1])
+
+            # 挠度限值基于实际构件长度
+            el_params = {
+                "slenderness_limit": slenderness_limit,
+                "deflection_limit": length / deflection_limit_ratio if length > 0 else 0.01,
+            }
+            check_result = self._check_element(el, forces, sec, mat, length, el_params)
             check_result["id"] = el["id"]
+            check_result["type"] = get_element_label(el.get("type", "beam"), dx, dy)
+            check_result["section"] = el.get("section_id", "")
+            check_result["story"] = get_story(el.get("type", "beam"), ni[2], nj[2], dx, dy)
+            check_result["node_i"] = el["node_i"]
+            check_result["node_j"] = el["node_j"]
             elements_results.append(check_result)
 
             if check_result["pass"]:
