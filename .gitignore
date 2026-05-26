@@ -27,5 +27,8 @@ output/
 .firecrawl/
 memory/
 
+# Build
+steel_frame_app.spec
+
 # Misc
 $null
