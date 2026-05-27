@@ -128,6 +128,8 @@ class ThreeDExporter(CAIAOServer):
                     "color": self._compute_color(ratio),
                     "stress_ratio": el.get("stress_ratio", 0),
                     "stability_ratio": el.get("stability_ratio", 0),
+                    "deflection_ratio": el.get("deflection_ratio", 0),
+                    "slenderness_ratio": el.get("slenderness_ratio", 0),
                     "pass": el.get("pass", True),
                 }
             three_d_data["color_map"] = color_map
