@@ -20,6 +20,7 @@ CAIAO 合并 Server — 通过 Hub 调度原子 Server。
 import os
 import sys
 import json
+import traceback
 
 # PyInstaller 打包兼容
 if getattr(sys, 'frozen', False):
@@ -279,6 +280,15 @@ async def api_run_pipeline(data: dict):
     result = web_api.call_tool("run_pipeline", data)
     if "error" in result:
         raise HTTPException(500, result["error"])
+
+    # 管道运行成功后，自动归档项目数据（ML 友好格式）
+    if result.get("status") == "success":
+        try:
+            _auto_save_project(data, result)
+        except Exception:
+            print("[WebAPI] 自动归档项目失败:")
+            traceback.print_exc()
+
     return result
 
 
@@ -300,6 +310,146 @@ async def api_llm_agent(data: dict):
     if "error" in result:
         raise HTTPException(500, result["error"])
     return result
+
+
+# ── 项目持久化（JSON 格式，含全部数据，便于训练）─────────────
+
+_PROJECTS_DIR = os.path.join(_ROOT, "projects")
+
+
+def _ensure_projects_dir():
+    os.makedirs(_PROJECTS_DIR, exist_ok=True)
+
+
+def _safe_name(name: str) -> str:
+    import re
+    return re.sub(r'[\\/:*?"<>|]', '_', name.strip())
+
+
+def _auto_save_project(input_data: dict, result: dict):
+    """管道成功后自动归档项目数据，采用 ML 友好格式。
+
+    数据结构分为三层：
+    - metadata: 项目名、时间戳、版本
+    - input: 几何参数、截面材料、荷载（天然特征向量）
+    - output: 校核摘要与构件明细（天然监督标签）
+    """
+    from datetime import datetime
+    _ensure_projects_dir()
+
+    name = _safe_name(input_data.get("name", "未命名项目"))
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+
+    code_check = result.get("code_check") or {}
+    summary = code_check.get("summary") or {}
+    elements = code_check.get("elements") or []
+
+    project = {
+        "metadata": {
+            "project_name": name,
+            "saved_at": datetime.now().isoformat(),
+            "version": "2.0",
+            "description": "管道运行完成后自动归档",
+        },
+        "input": {
+            "geometry": {
+                "grid_x": input_data.get("grid_x", []),
+                "grid_y": input_data.get("grid_y", []),
+                "num_stories": input_data.get("num_stories", 0),
+                "story_heights": input_data.get("story_heights", []),
+            },
+            "sections": {
+                "column": input_data.get("column_section", ""),
+                "beam": input_data.get("beam_section", ""),
+                "material": input_data.get("material", ""),
+            },
+            "loads": {
+                "dead_load": input_data.get("dead_load", 0),
+                "live_load": input_data.get("live_load", 0),
+                "wind_pressure": input_data.get("wind_pressure", 0),
+                "seismic_intensity": input_data.get("seismic_intensity", 0),
+            },
+        },
+        "output": {
+            "summary": {
+                "total_elements": summary.get("total_elements", 0),
+                "passed_count": summary.get("passed", 0),
+                "failed_count": summary.get("failed", 0),
+                "max_stress_ratio": summary.get("max_stress_ratio", 0),
+                "max_deflection_ratio": summary.get("max_deflection_ratio", 0),
+            },
+            "code_check_elements": elements,
+        },
+    }
+
+    filename = f"{name}_{ts}.json"
+    filepath = os.path.join(_PROJECTS_DIR, filename)
+    with open(filepath, "w", encoding="utf-8") as f:
+        json.dump(project, f, ensure_ascii=False, indent=2, default=str)
+    print(f"[WebAPI] 项目已自动归档: {filepath}")
+
+
+@app.post("/api/project/save")
+async def project_save(data: dict):
+    try:
+        _ensure_projects_dir()
+        meta = data.get("metadata", {})
+        name = _safe_name(meta.get("project_name", "未命名项目"))
+        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"{name}_{ts}.json"
+        filepath = os.path.join(_PROJECTS_DIR, filename)
+        with open(filepath, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2, default=str)
+        print(f"[WebAPI] 项目已手动保存: {filepath}")
+        return {"status": "ok", "file": filename, "path": filepath}
+    except Exception as e:
+        print(f"[WebAPI] 项目保存失败: {e}")
+        traceback.print_exc()
+        raise HTTPException(500, f"保存失败: {str(e)}")
+
+
+@app.get("/api/project/list")
+async def project_list():
+    _ensure_projects_dir()
+    files = []
+    for fname in sorted(os.listdir(_PROJECTS_DIR), reverse=True):
+        if not fname.endswith(".json"):
+            continue
+        fpath = os.path.join(_PROJECTS_DIR, fname)
+        try:
+            mtime = os.path.getmtime(fpath)
+            size = os.path.getsize(fpath)
+            with open(fpath, "r", encoding="utf-8") as f:
+                head = json.load(f)
+            meta = head.get("metadata", {})
+            files.append({
+                "file": fname,
+                "project_name": meta.get("project_name", fname),
+                "saved_at": meta.get("saved_at", ""),
+                "mtime": mtime,
+                "size": size,
+                "description": meta.get("description", ""),
+            })
+        except Exception:
+            files.append({"file": fname, "project_name": fname, "saved_at": "",
+                          "mtime": 0, "size": 0})
+    return {"projects": files}
+
+
+@app.post("/api/project/load")
+async def project_load(data: dict):
+    filename = data.get("file", "")
+    if not filename:
+        raise HTTPException(400, "Missing 'file' field")
+    filepath = os.path.join(_PROJECTS_DIR, filename)
+    abs_path = os.path.abspath(filepath)
+    if not abs_path.startswith(os.path.abspath(_PROJECTS_DIR)):
+        raise HTTPException(403, "Invalid path")
+    if not os.path.isfile(abs_path):
+        raise HTTPException(404, f"Project file not found: {filename}")
+    with open(abs_path, "r", encoding="utf-8") as f:
+        project_data = json.load(f)
+    return {"status": "ok", "data": project_data}
 
 
 # ── SSE 流式端点 ────────────────────────────────────────────────

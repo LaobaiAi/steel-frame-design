@@ -37,6 +37,20 @@ export const api = {
   llmAgent: (data: LLMAgentRequest) =>
     request<LLMAgentResponse>('/llm_agent', data),
 
+  // ── 项目持久化 ──────────────────────────────────────────────
+
+  /** 保存当前项目全部数据 */
+  projectSave: (data: Record<string, unknown>) =>
+    request<{ status: string; file: string }>('/project/save', data),
+
+  /** 列出所有已保存项目 */
+  projectList: () =>
+    request<{ projects: { file: string; project_name: string; saved_at: string; mtime: number; size: number; description: string }[] }>('/project/list'),
+
+  /** 加载指定项目 */
+  projectLoad: (file: string) =>
+    request<{ status: string; data: Record<string, unknown> }>('/project/load', { file }),
+
   /**
    * 流式：LLM 对话（SSE）。
    * 通过 POST /api/llm/stream 获取 SSE 事件流。
