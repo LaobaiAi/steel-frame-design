@@ -106,19 +106,31 @@ interface AppState {
   setAutoRotate: (v: boolean) => void;
   isOrthographic: boolean;
   setIsOrthographic: (v: boolean) => void;
-  selectedElement: number | null;
-  setSelectedElement: (id: number | null) => void;
+  selectedElements: number[];
+  setSelectedElements: (ids: number[]) => void;
+  addSelectedElement: (id: number) => void;
+  removeSelectedElement: (id: number) => void;
+  clearSelectedElements: () => void;
+  // Color mode for 3D cloud map
+  colorMode: string;
+  setColorMode: (mode: string) => void;
   // Auto-demo mode
   autoDemo: boolean;
   setAutoDemo: (v: boolean) => void;
 
+  // Pipeline re-run tracking
+  lastRunParams: Record<string, unknown> | null;
+  setLastRunParams: (params: Record<string, unknown> | null) => void;
+
   // Dock panel system
   dockPanels: { left: string[]; right: string[] };
   panelHeights: Record<string, number>;
+  panelWidths: Record<string, number>;
   collapsedDocked: Record<string, boolean>;
   dockPanel: (id: string, side: 'left' | 'right') => void;
   undockPanel: (id: string) => void;
   setPanelHeight: (id: string, height: number) => void;
+  setPanelWidth: (id: string, width: number) => void;
   setCollapsedDocked: (id: string, collapsed: boolean) => void;
 }
 
@@ -248,14 +260,29 @@ export const useStore = create<AppState>((set, get) => ({
   setAutoRotate: (v) => set({ autoRotate: v }),
   isOrthographic: false,
   setIsOrthographic: (v) => set({ isOrthographic: v }),
-  selectedElement: null,
-  setSelectedElement: (id) => set({ selectedElement: id }),
+  selectedElements: [],
+  setSelectedElements: (ids) => set({ selectedElements: ids }),
+  addSelectedElement: (id) => set(s => ({
+    selectedElements: s.selectedElements.includes(id) ? s.selectedElements : [...s.selectedElements, id],
+  })),
+  removeSelectedElement: (id) => set(s => ({
+    selectedElements: s.selectedElements.filter(x => x !== id),
+  })),
+  clearSelectedElements: () => set({ selectedElements: [] }),
+  // Color mode for 3D cloud map
+  colorMode: 'stress_ratio',
+  setColorMode: (mode) => set({ colorMode: mode }),
   autoDemo: false,
   setAutoDemo: (v) => set({ autoDemo: v }),
+
+  // Pipeline re-run tracking
+  lastRunParams: null,
+  setLastRunParams: (params) => set({ lastRunParams: params }),
 
   // Dock panel system
   dockPanels: { left: [], right: [] },
   panelHeights: {},
+  panelWidths: {},
   collapsedDocked: {},
   dockPanel: (id, side) => set(state => {
     const left = state.dockPanels.left.filter(x => x !== id);
@@ -272,6 +299,9 @@ export const useStore = create<AppState>((set, get) => ({
   })),
   setPanelHeight: (id, height) => set(state => ({
     panelHeights: { ...state.panelHeights, [id]: height },
+  })),
+  setPanelWidth: (id, width) => set(state => ({
+    panelWidths: { ...state.panelWidths, [id]: width },
   })),
   setCollapsedDocked: (id, collapsed) => set(state => ({
     collapsedDocked: { ...state.collapsedDocked, [id]: collapsed },

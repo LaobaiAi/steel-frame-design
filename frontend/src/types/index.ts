@@ -15,10 +15,14 @@ export interface ThreeDElement {
   section: string;
 }
 
+export type ColorMode = 'stress_ratio' | 'stability_ratio' | 'deflection_ratio' | 'slenderness_ratio';
+
 export interface ColorMapEntry {
   color: string;
   stress_ratio: number;
   stability_ratio: number;
+  deflection_ratio: number;
+  slenderness_ratio: number;
   pass: boolean;
 }
 
@@ -140,6 +144,24 @@ export interface LLMParamResponse {
   raw_llm_output: string;
 }
 
+export interface CalcStep {
+  /** 参数名称，如 "轴力 N" */
+  label: string;
+  /** 参数值，如 "1250.0 kN" */
+  value: string;
+}
+
+export interface CalcProcess {
+  /** 验算项目名称，如 "强度验算" */
+  title: string;
+  /** 计算步骤 */
+  steps: CalcStep[];
+  /** 最终结果行，如 "应力比 = 81.64/305 = 0.2677" */
+  resultLine: string;
+  /** 是否通过 */
+  passed: boolean;
+}
+
 export interface CodeCheckElement {
   id: number;
   type: 'column' | 'beam';
@@ -153,6 +175,8 @@ export interface CodeCheckElement {
   slenderness_ratio: number;
   pass: boolean;
   messages?: string[];
+  /** 各验算项目的详细计算过程 */
+  calcProcesses?: CalcProcess[];
 }
 
 /** SSE 流式事件类型 */

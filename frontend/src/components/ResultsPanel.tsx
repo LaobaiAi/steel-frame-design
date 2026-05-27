@@ -1,52 +1,169 @@
-import { useMemo, useState, useRef, useEffect } from 'react';
+import React, { useMemo, useState, useRef, useEffect, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { useStore } from '../store/useStore';
-import { PieChart, CheckCircle, XCircle, AlertTriangle, Filter, ArrowUpDown } from 'lucide-react';
-import type { CodeCheckElement } from '../types';
+import { PieChart, CheckCircle, XCircle, AlertTriangle, Filter, ArrowUpDown, Minus, Plus, ChevronDown, ChevronRight, Download, CheckSquare } from 'lucide-react';
+import type { CodeCheckElement, CalcProcess, CalcStep } from '../types';
 
 type TypeFilter = 'all' | 'column' | 'beam';
 type StatusFilter = 'all' | 'pass' | 'fail' | 'warning';
 type SortKey = keyof CodeCheckElement | '';
 type SortDir = 'asc' | 'desc';
 
-// ── Helpers ──────────────────────────────────────────────────────
+// ── Color helpers with dynamic thresholds ──────────────────────────
 
-const STRESS_COLORS = [
-  { max: 0.45, bg: 'rgba(50,204,102,0.12)', dot: '#32CC66' },
-  { max: 0.65, bg: 'rgba(170,221,0,0.12)', dot: '#AADD00' },
-  { max: 0.85, bg: 'rgba(255,204,0,0.12)', dot: '#FFCC00' },
-  { max: 1.0, bg: 'rgba(255,136,0,0.15)', dot: '#FF8800' },
-  { max: Infinity, bg: 'rgba(255,68,0,0.18)', dot: '#FF4400' },
-];
-
-function stressColor(ratio: number) {
-  for (const s of STRESS_COLORS) if (ratio <= s.max) return s;
-  return STRESS_COLORS[STRESS_COLORS.length - 1];
+function stressColor(ratio: number, safeLimit: number, criticalLimit: number) {
+  if (ratio > criticalLimit)         return { bg: 'rgba(255,68,0,0.18)', dot: '#FF4400' };
+  if (ratio > criticalLimit - 0.15)  return { bg: 'rgba(255,136,0,0.15)', dot: '#FF8800' };
+  if (ratio > safeLimit + 0.05)      return { bg: 'rgba(255,204,0,0.12)', dot: '#FFCC00' };
+  if (ratio > safeLimit - 0.15)      return { bg: 'rgba(170,221,0,0.12)', dot: '#AADD00' };
+  return { bg: 'rgba(50,204,102,0.12)', dot: '#32CC66' };
 }
 
-function ratioClass(ratio: number): StatusFilter {
-  if (ratio > 1.0) return 'fail';
-  if (ratio > 0.8) return 'warning';
+function ratioClass(ratio: number, safeLimit: number, criticalLimit: number): StatusFilter {
+  if (ratio > criticalLimit) return 'fail';
+  if (ratio > safeLimit) return 'warning';
   return 'pass';
 }
 
-function statusLabel(s: StatusFilter) {
-  if (s === 'pass') return '通过';
-  if (s === 'fail') return '超限';
-  if (s === 'warning') return '警告';
-  return '全部';
+/** 四项比值的最大值作为综合判定 */
+function getMaxRatio(el: Pick<CodeCheckElement, 'stress_ratio' | 'stability_ratio' | 'deflection_ratio' | 'slenderness_ratio'>): number {
+  return Math.max(
+    el.stress_ratio,
+    el.stability_ratio,
+    el.deflection_ratio,
+    el.slenderness_ratio / 150,
+  );
 }
 
-// ── Generate mock data matching new CodeCheckElement shape ────────
+const STATUS_LABEL: Record<StatusFilter, string> = {
+  all: '全部', pass: '通过', fail: '超限', warning: '警告',
+};
+
+// ── Mock data ─────────────────────────────────────────────────────
+
+function generateCalcProcesses(el: Pick<CodeCheckElement, 'type' | 'section' | 'stress_ratio' | 'stability_ratio' | 'deflection_ratio' | 'slenderness_ratio' | 'story'>): CalcProcess[] {
+  const isColumn = el.type === 'column';
+  const f = 305; // Q355
+  const sr = el.stress_ratio;
+  const limit = 1.0;
+
+  // Section properties
+  const A = isColumn ? 218.7 : 133.2;       // cm²
+  const Wx = isColumn ? 3330 : 2000;         // cm³
+  const ix = isColumn ? 17.4 : 17.1;         // cm
+  const iy = isColumn ? 10.1 : 7.36;         // cm
+  const length = isColumn ? (el.story === 1 ? 4.5 : 3.6) : 6.0; // m
+
+  // ── 强度验算 ──────────────────────────────────────────────────────
+  const totalStress = sr * f;
+  let strengthSteps: CalcStep[];
+  let strengthResultLine: string;
+
+  if (isColumn) {
+    const axialPart = totalStress * 0.55;
+    const bendPart = totalStress * 0.45;
+    const N = +(axialPart * A / 10).toFixed(1);
+    const Mx = +(bendPart * 1.05 * Wx / 1000).toFixed(1);
+    const sigmaN = +(N * 10 / A).toFixed(2);
+    const sigmaM = +(Mx * 1000 / (1.05 * Wx)).toFixed(2);
+    strengthSteps = [
+      { label: '轴力 N', value: `${N} kN` },
+      { label: '弯矩 Mx', value: `${Mx} kN·m` },
+      { label: '截面积 A', value: `${A} cm²` },
+      { label: '截面模量 Wx', value: `${Wx} cm³` },
+      { label: '塑性发展系数 γx', value: '1.05' },
+      { label: `σ = N/A + Mx/(γx·Wx)`, value: `${sigmaN} + ${sigmaM} = ${(sigmaN + sigmaM).toFixed(2)} MPa` },
+      { label: '强度设计值 f', value: `${f} MPa` },
+    ];
+    strengthResultLine = `应力比 = ${(sigmaN + sigmaM).toFixed(2)}/${f} = ${sr.toFixed(4)}`;
+  } else {
+    const Mx = +(totalStress * 1.05 * Wx / 1000).toFixed(1);
+    const sigma = +(Mx * 1000 / (1.05 * Wx)).toFixed(2);
+    strengthSteps = [
+      { label: '弯矩 Mx', value: `${Mx} kN·m` },
+      { label: '截面模量 Wx', value: `${Wx} cm³` },
+      { label: '塑性发展系数 γx', value: '1.05' },
+      { label: `σ = Mx/(γx·Wx)`, value: `${sigma} MPa` },
+      { label: '强度设计值 f', value: `${f} MPa` },
+    ];
+    strengthResultLine = `应力比 = ${sigma.toFixed(2)}/${f} = ${sr.toFixed(4)}`;
+  }
+
+  // ── 稳定验算 ──────────────────────────────────────────────────────
+  const l0 = length * 100; // cm
+  const lambda = +(l0 / ix).toFixed(1);
+  const phi = +(0.986 - 0.0016 * lambda).toFixed(4); // approximate b-curve
+  const NEx = +((3.1416 ** 2 * 206000 * A * 100) / (1.1 * lambda ** 2) / 1000).toFixed(0);
+  let stabilitySteps: CalcStep[];
+  let stabilityResultLine: string;
+
+  if (isColumn) {
+    const N = +(totalStress * 0.55 * A / 10).toFixed(1);
+    const Mx = +(totalStress * 0.45 * 1.05 * Wx / 1000).toFixed(1);
+    const phiA = +(N * 10 / (phi * A)).toFixed(2);
+    const betaMx = 1.0;
+    const denom = 1 - 0.8 * N / NEx;
+    const mxTerm = +(betaMx * Mx * 1000 / (1.05 * Wx * denom)).toFixed(2);
+    stabilitySteps = [
+      { label: '计算长度 l₀', value: `${l0.toFixed(0)} cm` },
+      { label: '回转半径 ix', value: `${ix} cm` },
+      { label: '长细比 λ = l₀/ix', value: `${lambda}` },
+      { label: '稳定系数 φ (b类)', value: `${phi}` },
+      { label: `N/(φ·A)`, value: `${phiA} MPa` },
+      { label: `欧拉力 NEx' = π²EA/(1.1λ²)`, value: `${NEx} kN` },
+      { label: '等效弯矩系数 βmx', value: `${betaMx}` },
+      { label: `βmx·Mx/(γx·Wx·(1-0.8N/NEx'))`, value: `${mxTerm} MPa` },
+      { label: `σ = N/(φ·A) + βmx·Mx/(γx·Wx·(1-0.8N/NEx'))`, value: `${(phiA + mxTerm).toFixed(2)} MPa` },
+      { label: '强度设计值 f', value: `${f} MPa` },
+    ];
+    stabilityResultLine = `稳定比 = ${(phiA + mxTerm).toFixed(2)}/${f} = ${el.stability_ratio.toFixed(4)}`;
+  } else {
+    const phiB = +(0.76 + 0.24 * (iy / ix)).toFixed(4); // simplified
+    stabilitySteps = [
+      { label: '整体稳定系数 φb', value: `${phiB}` },
+      { label: `σ = Mx/(φb·Wx)`, value: `${(totalStress / phiB).toFixed(2)} MPa` },
+      { label: '强度设计值 f', value: `${f} MPa` },
+    ];
+    stabilityResultLine = `稳定比 = ${(totalStress / phiB).toFixed(2)}/${f} = ${el.stability_ratio.toFixed(4)}`;
+  }
+
+  // ── 挠度验算 ──────────────────────────────────────────────────────
+  const span = length * 1000; // mm
+  const allowDefl = +(span / 250).toFixed(1);
+  const maxDefl = +(allowDefl * el.deflection_ratio).toFixed(1);
+  const deflectionSteps: CalcStep[] = [
+    { label: '计算跨度 L', value: `${span} mm` },
+    { label: '最大挠度 δ (弹性分析)', value: `${maxDefl} mm` },
+    { label: '容许挠度 [δ] = L/250', value: `${allowDefl} mm` },
+  ];
+  const deflectionResultLine = `挠度比 = ${maxDefl}/${allowDefl} = ${el.deflection_ratio.toFixed(4)}`;
+
+  // ── 长细比验算 ───────────────────────────────────────────────────
+  const slendernessLimit = isColumn ? 120 : 150;
+  const slendernessSteps: CalcStep[] = [
+    { label: '计算长度 l₀', value: `${l0.toFixed(0)} cm` },
+    { label: '回转半径 i_min', value: `${iy} cm` },
+    { label: '长细比 λ = l₀/i', value: `${el.slenderness_ratio.toFixed(1)}` },
+    { label: `容许长细比 [λ]`, value: `${slendernessLimit}` },
+  ];
+  const slendernessResultLine = `λ/[λ] = ${(el.slenderness_ratio / slendernessLimit).toFixed(4)}`;
+
+  return [
+    { title: '强度验算', steps: strengthSteps, resultLine: strengthResultLine, passed: sr <= limit },
+    { title: '稳定验算', steps: stabilitySteps, resultLine: stabilityResultLine, passed: el.stability_ratio <= limit },
+    { title: '挠度验算', steps: deflectionSteps, resultLine: deflectionResultLine, passed: el.deflection_ratio <= limit },
+    { title: '长细比验算', steps: slendernessSteps, resultLine: slendernessResultLine, passed: el.slenderness_ratio <= slendernessLimit },
+  ];
+}
 
 function generateMockElements(): CodeCheckElement[] {
   const sections = ['HW400x400x13x21', 'HM390x300x10x16'];
   const els: CodeCheckElement[] = [];
   let id = 1;
   for (let story = 1; story <= 4; story++) {
-    // 16 columns per floor (4x4 grid)
     for (let c = 0; c < 16; c++) {
       const r = 0.15 + Math.random() * 0.85;
-      els.push({
+      const el: CodeCheckElement = {
         id: id++, type: 'column', section: sections[0], story,
         node_i: id * 2, node_j: id * 2 + 1,
         stress_ratio: +r.toFixed(4),
@@ -54,12 +171,13 @@ function generateMockElements(): CodeCheckElement[] {
         deflection_ratio: +(r * 0.3).toFixed(4),
         slenderness_ratio: +(Math.random() * 120).toFixed(1),
         pass: r <= 1.0,
-      });
+      };
+      el.calcProcesses = generateCalcProcesses(el);
+      els.push(el);
     }
-    // 24 beams per floor (3x4 X + 4x3 Y)
     for (let b = 0; b < 24; b++) {
       const r = 0.2 + Math.random() * 0.85;
-      els.push({
+      const el: CodeCheckElement = {
         id: id++, type: 'beam', section: sections[1], story,
         node_i: id * 2, node_j: id * 2 + 1,
         stress_ratio: +r.toFixed(4),
@@ -67,7 +185,9 @@ function generateMockElements(): CodeCheckElement[] {
         deflection_ratio: +(r * 0.45).toFixed(4),
         slenderness_ratio: +(Math.random() * 100).toFixed(1),
         pass: r <= 1.0,
-      });
+      };
+      el.calcProcesses = generateCalcProcesses(el);
+      els.push(el);
     }
   }
   return els;
@@ -78,7 +198,7 @@ const MOCK_ELEMENTS = generateMockElements();
 // ── Main Component ───────────────────────────────────────────────
 
 export default function ResultsPanel() {
-  const { codeCheckResults, selectedElement, setSelectedElement } = useStore();
+  const { codeCheckResults, selectedElements, setSelectedElements, colorMode, setColorMode } = useStore();
 
   const [typeFilter, setTypeFilter] = useState<TypeFilter>('all');
   const [floorFilter, setFloorFilter] = useState<number | 'all'>('all');
@@ -86,29 +206,40 @@ export default function ResultsPanel() {
   const [sortKey, setSortKey] = useState<SortKey>('stress_ratio');
   const [sortDir, setSortDir] = useState<SortDir>('desc');
   const [selectedRow, setSelectedRow] = useState<number | null>(null);
+  const [safeLimit, setSafeLimit] = useState(0.8);
+  const [criticalLimit, setCriticalLimit] = useState(1.0);
+  const [showDetailModal, setShowDetailModal] = useState(false);
+  const [expandedCalc, setExpandedCalc] = useState<Set<string>>(new Set(['强度验算']));
 
   const rowRefs = useRef<Map<number, HTMLTableRowElement>>(new Map());
 
-  // ── Data ───────────────────────────────────────────────────────
+  // ── Elements ────────────────────────────────────────────────────
   const elements: CodeCheckElement[] = useMemo(() => {
     if (!codeCheckResults) return MOCK_ELEMENTS;
     const data = codeCheckResults as any;
     if (data.elements && Array.isArray(data.elements) && data.elements.length > 0) {
-      // Merge in defaults for missing fields (backward compat)
-      return (data.elements as any[]).map((el: any) => ({
-        id: el.id ?? 0,
-        type: el.type ?? 'beam',
-        section: el.section ?? '',
-        story: el.story ?? 1,
-        node_i: el.node_i ?? 0,
-        node_j: el.node_j ?? 0,
-        stress_ratio: el.stress_ratio ?? 0,
-        stability_ratio: el.stability_ratio ?? 0,
-        deflection_ratio: el.deflection_ratio ?? 0,
-        slenderness_ratio: el.slenderness_ratio ?? 0,
-        pass: el.pass ?? true,
-        messages: el.messages ?? [],
-      }));
+      return (data.elements as any[]).map((el: any) => {
+        const mapped: CodeCheckElement = {
+          id: el.id ?? 0,
+          type: el.type === '柱' ? 'column' : el.type === 'X向梁' || el.type === 'Y向梁' ? 'beam' : (el.type ?? 'beam'),
+          section: el.section ?? '',
+          story: el.story ?? 1,
+          node_i: el.node_i ?? 0,
+          node_j: el.node_j ?? 0,
+          stress_ratio: el.stress_ratio ?? 0,
+          stability_ratio: el.stability_ratio ?? 0,
+          deflection_ratio: el.deflection_ratio ?? 0,
+          slenderness_ratio: el.slenderness_ratio ?? 0,
+          pass: el.pass ?? true,
+          messages: el.messages ?? [],
+          calcProcesses: el.calc_processes ?? el.calcProcesses,
+        };
+        // Auto-generate calc processes if backend didn't provide them
+        if (!mapped.calcProcesses) {
+          mapped.calcProcesses = generateCalcProcesses(mapped);
+        }
+        return mapped;
+      });
     }
     return MOCK_ELEMENTS;
   }, [codeCheckResults]);
@@ -120,49 +251,55 @@ export default function ResultsPanel() {
     return Array.from(s).sort((a, b) => a - b);
   }, [elements]);
 
-  // ── Filter & Sort ──────────────────────────────────────────────
+  // ── Filter & Sort (use dynamic thresholds) ──────────────────────
   const filtered = useMemo(() => {
     let result = elements;
     if (typeFilter !== 'all') result = result.filter(el => el.type === typeFilter);
     if (floorFilter !== 'all') result = result.filter(el => el.story === floorFilter);
-    if (statusFilter === 'pass') result = result.filter(el => el.pass);
-    else if (statusFilter === 'fail') result = result.filter(el => !el.pass && el.stress_ratio > 1.0);
-    else if (statusFilter === 'warning') result = result.filter(el => el.pass && el.stress_ratio > 0.8);
+    if (statusFilter === 'pass') result = result.filter(el => getMaxRatio(el) <= safeLimit);
+    else if (statusFilter === 'fail') result = result.filter(el => getMaxRatio(el) > criticalLimit);
+    else if (statusFilter === 'warning') result = result.filter(el => getMaxRatio(el) > safeLimit && getMaxRatio(el) <= criticalLimit);
 
     if (sortKey) {
       result = [...result].sort((a, b) => {
         const av = a[sortKey], bv = b[sortKey];
         const va = typeof av === 'number' ? av : String(av);
         const vb = typeof bv === 'number' ? bv : String(bv);
-        const cmp = va < vb ? -1 : va > vb ? 1 : 0;
-        return sortDir === 'asc' ? cmp : -cmp;
+        return sortDir === 'asc' ? (va < vb ? -1 : va > vb ? 1 : 0) : (va > vb ? -1 : va < vb ? 1 : 0);
       });
     }
     return result;
-  }, [elements, typeFilter, floorFilter, statusFilter, sortKey, sortDir]);
+  }, [elements, typeFilter, floorFilter, statusFilter, sortKey, sortDir, safeLimit, criticalLimit]);
 
-  // ── Stats ──────────────────────────────────────────────────────
+  // ── Stats (四项比值综合判定) ──────────────────────────────────
   const stats = useMemo(() => {
     const total = elements.length;
-    const passed = elements.filter(e => e.pass).length;
-    const failed = elements.filter(e => !e.pass).length;
-    const critical = elements.filter(e => e.stress_ratio > 1.0).length;
-    const warning = elements.filter(e => e.stress_ratio > 0.8 && e.stress_ratio <= 1.0).length;
-    const safe = elements.filter(e => e.stress_ratio <= 0.8).length;
-    return { total, passed, failed, critical, warning, safe };
-  }, [elements]);
+    const safe = elements.filter(e => getMaxRatio(e) <= safeLimit).length;
+    const warning = elements.filter(e => getMaxRatio(e) > safeLimit && getMaxRatio(e) <= criticalLimit).length;
+    const critical = elements.filter(e => getMaxRatio(e) > criticalLimit).length;
+    return { total, safe, warning, critical, passed: safe, failed: critical };
+  }, [elements, safeLimit, criticalLimit]);
 
-  // ── Selection & scroll ─────────────────────────────────────────
+  // ── Selection ──────────────────────────────────────────────────
   useEffect(() => {
-    if (selectedElement !== null) {
-      setSelectedRow(selectedElement);
-      const row = rowRefs.current.get(selectedElement);
+    if (selectedElements.length === 1) {
+      setSelectedRow(selectedElements[0]);
+      const row = rowRefs.current.get(selectedElements[0]);
       row?.scrollIntoView({ block: 'center', behavior: 'smooth' });
     }
-  }, [selectedElement]);
+  }, [selectedElements]);
 
-  const handleRowClick = (el: CodeCheckElement) => {
-    setSelectedElement(el.id);
+  const handleRowClick = (el: CodeCheckElement, e?: React.MouseEvent) => {
+    if (e?.ctrlKey) {
+      setSelectedElements(selectedElements.includes(el.id)
+        ? selectedElements
+        : [...selectedElements, el.id]
+      );
+    } else if (e?.shiftKey) {
+      setSelectedElements(selectedElements.filter(id => id !== el.id));
+    } else {
+      setSelectedElements([el.id]);
+    }
     setSelectedRow(el.id);
   };
 
@@ -171,65 +308,319 @@ export default function ResultsPanel() {
     else { setSortKey(key); setSortDir('desc'); }
   };
 
-  // ── Selected detail ────────────────────────────────────────────
   const detailEl = selectedRow ? elements.find(e => e.id === selectedRow) : null;
 
+  // ── Export single component calc report ──────────────────────────
+  const exportComponentDetail = useCallback((el: CodeCheckElement) => {
+    const lines: string[] = [];
+    const pad = (s: string) => `  ${s}`;
+
+    lines.push('='.repeat(48));
+    lines.push('  钢框架构件计算书');
+    lines.push('='.repeat(48));
+    lines.push('');
+    lines.push(`构件: ${el.type === 'column' ? '柱' : '梁'} #${el.id}`);
+    lines.push(`截面: ${el.section}`);
+    lines.push(`楼层: ${el.story}F`);
+    lines.push(`节点: ${el.node_i} → ${el.node_j}`);
+    lines.push(`结果: ${el.pass ? '✓ 通过' : '✗ 不通过'}`);
+    lines.push('');
+    lines.push('─'.repeat(48));
+
+    // 四项比值
+    lines.push('');
+    lines.push('【受力分析】');
+    lines.push(pad(`应力比: ${el.stress_ratio.toFixed(4)}`));
+    lines.push(pad(`稳定比: ${el.stability_ratio.toFixed(4)}`));
+    lines.push(pad(`挠度比: ${el.deflection_ratio.toFixed(4)}`));
+    lines.push(pad(`长细比: ${el.slenderness_ratio.toFixed(1)}`));
+    lines.push('');
+
+    // 详细验算过程
+    lines.push('【构件验算】');
+    const cps = el.calcProcesses ?? [];
+    cps.forEach((cp) => {
+      lines.push('');
+      lines.push(pad(`── ${cp.title} ${cp.passed ? '✓ 通过' : '✗ 不通过'}`));
+      cp.steps.forEach(step => {
+        lines.push(pad(`${step.label}: ${step.value}`));
+      });
+      lines.push(pad(`结果: ${cp.resultLine}`));
+    });
+
+    lines.push('');
+    lines.push('='.repeat(48));
+    lines.push('XuanwuAI · CAIAO 钢框架设计系统');
+    lines.push(`生成时间: ${new Date().toLocaleString('zh-CN')}`);
+
+    const content = lines.join('\n');
+    const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `构件计算书_${el.type === 'column' ? '柱' : '梁'}_${el.id}_${el.section}_${el.story}F.txt`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }, []);
+
+  // Portal modal — extracted to avoid Rolldown JSX parser issue with createPortal
+  const detailModal = showDetailModal && detailEl && createPortal(
+    <div className="fixed inset-0 z-50 bg-black/40" onClick={() => setShowDetailModal(false)}>
+      <div className="absolute left-4 top-24 bottom-4 w-[520px] bg-[#0d0d24] border border-white/10 rounded-xl shadow-2xl flex flex-col" onClick={e => e.stopPropagation()}>
+        {/* Modal Header */}
+        <div className="flex items-center justify-between px-5 py-3 border-b border-white/5">
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-medium text-white">构件计算详情</span>
+            <span className="text-[11px] text-gray-500">
+              {detailEl.type === 'column' ? '柱' : '梁'} #{detailEl.id} · {detailEl.section} · {detailEl.story}F
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            <button onClick={() => exportComponentDetail(detailEl)}
+              className="flex items-center gap-1 px-2 py-0.5 rounded text-[10px] text-gray-400 hover:text-cyan hover:bg-cyan/10 transition-all">
+              <Download size={10} />
+              导出
+            </button>
+            <button onClick={() => setShowDetailModal(false)}
+              className="text-gray-500 hover:text-white transition-colors text-lg leading-none">&times;</button>
+          </div>
+        </div>
+
+        <div className="p-5 space-y-5 flex-1 overflow-y-auto">
+          {/* 受力分析 */}
+          <div>
+            <h3 className="text-xs font-medium text-cyan mb-3 flex items-center gap-1.5">
+              <span className="w-1 h-3 bg-cyan rounded-full" />
+              受力分析
+            </h3>
+            <div className="grid grid-cols-2 gap-x-6 gap-y-2.5 text-[11px]">
+              <div className="flex justify-between items-center">
+                <span className="text-gray-500">应力比</span>
+                <span className="font-mono" style={{ color: stressColor(detailEl.stress_ratio, safeLimit, criticalLimit).dot }}>
+                  {detailEl.stress_ratio.toFixed(4)}
+                </span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-gray-500">稳定比</span>
+                <span className="font-mono text-gray-300">{detailEl.stability_ratio.toFixed(4)}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-gray-500">挠度比</span>
+                <span className="font-mono text-gray-300">{detailEl.deflection_ratio.toFixed(4)}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-gray-500">长细比</span>
+                <span className="font-mono text-gray-300">{detailEl.slenderness_ratio.toFixed(1)}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* 构件验算 + 计算过程 */}
+          <div>
+            <h3 className="text-xs font-medium text-cyan mb-3 flex items-center gap-1.5">
+              <span className="w-1 h-3 bg-cyan rounded-full" />
+              构件验算
+            </h3>
+            <div className="space-y-1.5">
+              {(detailEl.calcProcesses ?? []).map((cp, i) => {
+                const isExpanded = expandedCalc.has(cp.title);
+                return (
+                  <div key={i} className="rounded-lg border border-white/[0.06] overflow-hidden">
+                    {/* Card header — click to toggle */}
+                    <button
+                      onClick={() => {
+                        setExpandedCalc(prev => {
+                          const next = new Set(prev);
+                          next.has(cp.title) ? next.delete(cp.title) : next.add(cp.title);
+                          return next;
+                        });
+                      }}
+                      className="w-full flex items-center gap-2 px-3 py-2 text-[11px] hover:bg-white/[0.03] transition-colors"
+                    >
+                      {isExpanded
+                        ? <ChevronDown size={12} className="text-gray-500 flex-shrink-0" />
+                        : <ChevronRight size={12} className="text-gray-500 flex-shrink-0" />}
+                      <span className="text-gray-300">{cp.title}</span>
+                      <span className="ml-auto font-mono text-gray-400">{cp.resultLine}</span>
+                      {cp.passed
+                        ? <CheckCircle size={12} className="text-green-400 flex-shrink-0" />
+                        : <XCircle size={12} className="text-red-400 flex-shrink-0" />}
+                    </button>
+
+                    {/* Expanded body — calculation steps */}
+                    {isExpanded && (
+                      <div className="px-3 pb-2.5 pt-1 border-t border-white/[0.04]">
+                        <div className="grid grid-cols-[1fr_auto] gap-x-4 gap-y-1 text-[10px]">
+                          {cp.steps.map((step, j) => (
+                            <React.Fragment key={j}>
+                              <span className="text-gray-500 truncate">{step.label}</span>
+                              <span className="font-mono text-gray-300 text-right whitespace-nowrap">{step.value}</span>
+                            </React.Fragment>
+                          ))}
+                        </div>
+                        <div className="mt-2 pt-1.5 border-t border-white/[0.04] text-[10px] flex items-center gap-2">
+                          <span className="text-gray-500">结果</span>
+                          <span className="font-mono text-gray-300">{cp.resultLine}</span>
+                          <span className={`ml-auto font-medium ${cp.passed ? 'text-green-400' : 'text-red-400'}`}>
+                            {cp.passed ? '通过 ✓' : '不通过 ✗'}
+                          </span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>,
+    document.body
+  );
+
+  // ── Threshold helpers ──────────────────────────────────────────
+  const stepThreshold = useCallback((key: 'safe' | 'critical', delta: number) => {
+    if (key === 'safe') {
+      setSafeLimit(v => Math.max(0.1, Math.min(criticalLimit - 0.05, +(v + delta).toFixed(2))));
+    } else {
+      setCriticalLimit(v => Math.max(safeLimit + 0.05, Math.min(2.0, +(v + delta).toFixed(2))));
+    }
+  }, [safeLimit, criticalLimit]);
+
+  // Donut circumference
+  const C = 2 * Math.PI * 32; // ~200.96
+
   return (
-    <div className="glass-strong rounded-xl overflow-hidden flex flex-col max-h-[620px]">
+    <>
+    <div className="glass-strong rounded-xl flex flex-col flex-1 min-h-0 overflow-hidden">
       {/* Header */}
       <div className="px-4 py-3 border-b border-white/5 flex items-center gap-2 flex-shrink-0">
         <PieChart size={14} className="text-cyan" />
-        <span className="text-xs font-medium text-white">校核统计</span>
+        <span className="text-xs font-medium text-white" style={{ marginRight: '4em' }}>校核统计</span>
+        <button
+          onClick={() => setShowDetailModal(true)}
+          disabled={!detailEl}
+          className={`px-2.5 py-0.5 rounded text-[10px] font-medium transition-all ${
+            detailEl
+              ? 'bg-cyan/15 text-cyan hover:bg-cyan/25 cursor-pointer'
+              : 'text-gray-600 cursor-not-allowed'
+          }`}
+        >构建详情</button>
         <span className="text-[10px] text-gray-500 ml-auto">{stats.total} 构件</span>
       </div>
 
-      {/* Donut chart */}
-      <div className="px-4 py-3 flex items-center gap-4 flex-shrink-0 border-b border-white/5">
-        <svg width="70" height="70" viewBox="0 0 80 80" className="flex-shrink-0">
+      {/* 云图参数切换 */}
+      <div className="px-4 py-2 border-b border-white/5 flex items-center gap-1.5 flex-shrink-0">
+        <span className="text-[9px] text-gray-500 mr-1">云图</span>
+        {(['stress_ratio', 'stability_ratio', 'deflection_ratio', 'slenderness_ratio'] as const).map(mode => {
+          const labels: Record<string, string> = {
+            stress_ratio: '应力比', stability_ratio: '稳定比',
+            deflection_ratio: '挠度比', slenderness_ratio: '长细比',
+          };
+          const isActive = colorMode === mode;
+          return (
+            <button key={mode} onClick={() => setColorMode(mode)}
+              className={`px-2 py-0.5 rounded text-[10px] transition-all ${
+                isActive ? 'bg-cyan/15 text-cyan font-medium' : 'text-gray-500 hover:text-gray-300 bg-white/5'
+              }`}>
+              {labels[mode]}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Donut + Legend row with editable thresholds */}
+      <div className="px-4 py-3 flex items-start gap-4 flex-shrink-0 border-b border-white/5">
+        {/* Donut chart */}
+        <svg width="70" height="70" viewBox="0 0 80 80" className="flex-shrink-0 mt-0.5">
           <circle cx="40" cy="40" r="32" fill="none" stroke="rgba(255,255,255,0.05)" strokeWidth="8" />
           {stats.safe > 0 && (
             <circle cx="40" cy="40" r="32" fill="none" stroke="#32CC66" strokeWidth="8"
-              strokeDasharray={`${(stats.safe / stats.total) * 200.96} 200.96`}
+              strokeDasharray={`${(stats.safe / stats.total) * C} ${C}`}
               strokeDashoffset="0" transform="rotate(-90 40 40)" strokeLinecap="round" />
           )}
           {stats.warning > 0 && (
             <circle cx="40" cy="40" r="32" fill="none" stroke="#FFCC00" strokeWidth="8"
-              strokeDasharray={`${(stats.warning / stats.total) * 200.96} 200.96`}
-              strokeDashoffset={-((stats.safe / stats.total) * 200.96)}
+              strokeDasharray={`${(stats.warning / stats.total) * C} ${C}`}
+              strokeDashoffset={-((stats.safe / stats.total) * C)}
               transform="rotate(-90 40 40)" strokeLinecap="round" />
           )}
           {stats.critical > 0 && (
             <circle cx="40" cy="40" r="32" fill="none" stroke="#FF4400" strokeWidth="8"
-              strokeDasharray={`${(stats.critical / stats.total) * 200.96} 200.96`}
-              strokeDashoffset={-(((stats.safe + stats.warning) / stats.total) * 200.96)}
+              strokeDasharray={`${(stats.critical / stats.total) * C} ${C}`}
+              strokeDashoffset={-(((stats.safe + stats.warning) / stats.total) * C)}
               transform="rotate(-90 40 40)" strokeLinecap="round" />
           )}
           <text x="40" y="36" textAnchor="middle" className="fill-white text-[11px] font-bold">{stats.total}</text>
           <text x="40" y="48" textAnchor="middle" className="fill-gray-400 text-[8px]">构件</text>
         </svg>
-        <div className="space-y-1 text-[10px]">
-          <div className="flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-full bg-[#32CC66]" />
-            <span className="text-gray-400">安全 (&le;0.8)</span>
-            <span className="text-white font-medium ml-auto">{stats.safe}</span>
+
+        {/* Legend with editable thresholds — CSS grid for perfect alignment */}
+        <div className="flex-1 text-[10px] min-w-0" style={{ display: 'grid', gridTemplateColumns: '16px 32px 28px 16px 1fr 48px', gap: '4px 6px', alignItems: 'center' }}>
+          {/* Safe row */}
+          <span className="w-2 h-2 rounded-full bg-[#32CC66] justify-self-center" />
+          <span className="text-gray-400">安全</span>
+          <span className="text-white font-medium text-right">{stats.safe}</span>
+          <span className="text-gray-600 text-right">≤</span>
+          <span className="font-mono text-gray-300 text-right tabular-nums">{safeLimit.toFixed(2)}</span>
+          <div className="flex items-center gap-[1px]">
+            <button onClick={() => stepThreshold('safe', -0.05)}
+              className="p-0.5 rounded hover:bg-white/10 text-gray-500 hover:text-white transition-colors">
+              <Minus size={10} />
+            </button>
+            <button onClick={() => stepThreshold('safe', 0.05)}
+              className="p-0.5 rounded hover:bg-white/10 text-gray-500 hover:text-white transition-colors">
+              <Plus size={10} />
+            </button>
           </div>
-          <div className="flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-full bg-[#FFCC00]" />
-            <span className="text-gray-400">警告 (&gt;0.8)</span>
-            <span className="text-white font-medium ml-auto">{stats.warning}</span>
+
+          {/* Warning row */}
+          <span className="w-2 h-2 rounded-full bg-[#FFCC00] justify-self-center" />
+          <span className="text-gray-400">警告</span>
+          <span className="text-white font-medium text-right">{stats.warning}</span>
+          <span className="text-gray-600 text-right">&gt;</span>
+          <span className="font-mono text-gray-300 text-right tabular-nums">{safeLimit.toFixed(2)}</span>
+          <div /> {/* spacer */}
+
+          {/* Critical row */}
+          <span className="w-2 h-2 rounded-full bg-[#FF4400] justify-self-center" />
+          <span className="text-gray-400">超限</span>
+          <span className="text-white font-medium text-right">{stats.critical}</span>
+          <span className="text-gray-600 text-right">&gt;</span>
+          <span className="font-mono text-gray-300 text-right tabular-nums">{criticalLimit.toFixed(2)}</span>
+          <div className="flex items-center gap-[1px]">
+            <button onClick={() => stepThreshold('critical', -0.05)}
+              className="p-0.5 rounded hover:bg-white/10 text-gray-500 hover:text-white transition-colors">
+              <Minus size={10} />
+            </button>
+            <button onClick={() => stepThreshold('critical', 0.05)}
+              className="p-0.5 rounded hover:bg-white/10 text-gray-500 hover:text-white transition-colors">
+              <Plus size={10} />
+            </button>
           </div>
-          <div className="flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-full bg-[#FF4400]" />
-            <span className="text-gray-400">超限 (&gt;1.0)</span>
-            <span className="text-white font-medium ml-auto">{stats.critical}</span>
-          </div>
+        </div>
+      </div>
+
+      {/* Gradient bar */}
+      <div className="px-4 py-1.5 flex-shrink-0 border-b border-white/5">
+        <div className="h-1.5 w-full rounded-full overflow-hidden flex">
+          <div className="h-full flex-1" style={{ background: 'linear-gradient(90deg, #32CC66, #AADD00)' }} />
+          <div className="h-full" style={{
+            flex: `0 0 ${Math.max(6, Math.min(40, (criticalLimit - safeLimit) * 100))}px`,
+            background: 'linear-gradient(90deg, #AADD00, #FFCC00)',
+          }} />
+          <div className="h-full flex-1" style={{ background: 'linear-gradient(90deg, #FFCC00, #FF8800, #FF4400)' }} />
+        </div>
+        <div className="flex justify-between text-[8px] text-gray-600 mt-0.5">
+          <span>0</span>
+          <span style={{ color: safeLimit > 0.3 ? '#a0a0a0' : 'transparent' }}>{safeLimit.toFixed(2)}</span>
+          <span>{criticalLimit.toFixed(2)}</span>
         </div>
       </div>
 
       {/* Filter toolbar */}
       <div className="px-3 py-2 flex items-center gap-1.5 flex-shrink-0 border-b border-white/5 flex-wrap">
         <Filter size={11} className="text-gray-500 flex-shrink-0" />
-        {/* Type filter */}
         {(['all', 'column', 'beam'] as const).map(t => (
           <button key={t} onClick={() => setTypeFilter(t)}
             className={`px-2 py-0.5 rounded text-[10px] transition-all ${
@@ -239,7 +630,6 @@ export default function ResultsPanel() {
           </button>
         ))}
         <span className="text-gray-700 mx-0.5">|</span>
-        {/* Floor filter */}
         <button key="all-f" onClick={() => setFloorFilter('all')}
           className={`px-2 py-0.5 rounded text-[10px] transition-all ${
             floorFilter === 'all' ? 'bg-cyan/15 text-cyan' : 'text-gray-500 hover:text-gray-300 bg-white/5'
@@ -251,13 +641,17 @@ export default function ResultsPanel() {
             }`}>{f}F</button>
         ))}
         <span className="text-gray-700 mx-0.5">|</span>
-        {/* Status filter */}
         {(['all', 'pass', 'warning', 'fail'] as const).map(s => (
           <button key={s} onClick={() => setStatusFilter(s)}
             className={`px-2 py-0.5 rounded text-[10px] transition-all ${
               statusFilter === s ? 'bg-cyan/15 text-cyan' : 'text-gray-500 hover:text-gray-300 bg-white/5'
-            }`}>{statusLabel(s)}</button>
+            }`}>{STATUS_LABEL[s]}</button>
         ))}
+        <button onClick={() => setSelectedElements(filtered.map(el => el.id))}
+          className="px-2 py-0.5 rounded text-[10px] text-gray-500 hover:text-cyan hover:bg-cyan/10 transition-all flex items-center gap-1"
+          title="选中当前筛选结果中的所有构件">
+          <CheckSquare size={11} /> 选中所有筛选构建
+        </button>
         <span className="text-[10px] text-gray-600 ml-auto">{filtered.length} 条</span>
       </div>
 
@@ -279,14 +673,15 @@ export default function ResultsPanel() {
           </thead>
           <tbody>
             {filtered.map(el => {
-              const sc = stressColor(el.stress_ratio);
+              const mr = getMaxRatio(el);
+              const sc = stressColor(mr, safeLimit, criticalLimit);
               const isSelected = selectedRow === el.id;
               return (
                 <tr key={el.id}
                   ref={node => { if (node) rowRefs.current.set(el.id, node); }}
-                  onClick={() => handleRowClick(el)}
+                  onClick={(e) => handleRowClick(el, e)}
                   className={`border-b border-white/[0.02] cursor-pointer transition-all hover:bg-white/5 ${
-                    isSelected ? 'bg-cyan/10 !border-cyan/20 ring-1 ring-cyan/20' : ''
+                    isSelected ? 'bg-purple-400/10 !border-purple-400/20 ring-1 ring-purple-400/20' : ''
                   }`}
                   style={{ backgroundColor: isSelected ? undefined : sc.bg }}>
                   <td className="py-1.5 pl-3 text-gray-400 font-mono">{el.id}</td>
@@ -310,12 +705,14 @@ export default function ResultsPanel() {
                     {el.slenderness_ratio.toFixed(1)}
                   </td>
                   <td className="py-1.5 pr-3 text-center">
-                    {el.pass
-                      ? <CheckCircle size={12} className="text-green-400 inline" />
-                      : ratioClass(el.stress_ratio) === 'warning'
-                        ? <AlertTriangle size={12} className="text-yellow-400 inline" />
-                        : <XCircle size={12} className="text-red-400 inline" />
-                    }
+                    {(() => {
+                      const cls = ratioClass(mr, safeLimit, criticalLimit);
+                      return cls === 'pass'
+                        ? <CheckCircle size={12} className="text-green-400 inline" />
+                        : cls === 'warning'
+                          ? <AlertTriangle size={12} className="text-yellow-400 inline" />
+                          : <XCircle size={12} className="text-red-400 inline" />;
+                    })()}
                   </td>
                 </tr>
               );
@@ -324,7 +721,7 @@ export default function ResultsPanel() {
         </table>
       </div>
 
-      {/* Detail panel */}
+      {/* Bottom detail bar */}
       {detailEl && (
         <div className="px-4 py-3 border-t border-white/5 flex-shrink-0 space-y-2">
           <div className="flex items-center gap-2">
@@ -338,7 +735,7 @@ export default function ResultsPanel() {
           </div>
           <div className="grid grid-cols-4 gap-x-3 gap-y-1 text-[11px]">
             <span className="text-gray-500">应力比</span>
-            <span className="text-right font-mono" style={{ color: stressColor(detailEl.stress_ratio).dot }}>
+            <span className="text-right font-mono" style={{ color: stressColor(detailEl.stress_ratio, safeLimit, criticalLimit).dot }}>
               {detailEl.stress_ratio.toFixed(4)}
             </span>
             <span className="text-gray-500">稳定比</span>
@@ -357,7 +754,10 @@ export default function ResultsPanel() {
           )}
         </div>
       )}
+
     </div>
+      {detailModal}
+    </>
   );
 }
 
