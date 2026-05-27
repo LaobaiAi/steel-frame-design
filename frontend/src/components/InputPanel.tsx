@@ -4,7 +4,7 @@ import {
   Send, Settings, MessageSquare, ChevronDown, ChevronUp, Sparkles, Bot, Cpu, Key,
   Grid3X3, Layers, Building2, Ruler, Weight, Wind, Gauge,
   CheckCircle2, AlertCircle, Info, BookTemplate, ArrowRight,
-  Loader2, Zap,
+  Loader2, Zap, FolderOpen, Download,
 } from 'lucide-react';
 import ApiSettingsModal from './ApiSettingsModal';
 import { api } from '../api/client';
@@ -111,6 +111,7 @@ function runPipelineBackground(params: RunPipelineParams) {
   api.runPipeline(params).then(result => {
     store.setIsRunning(false);
     if (result.status === 'success') {
+      store.setLastRunParams(params as unknown as Record<string, unknown>);
       store.setThreeDData(result.three_d_data ?? null);
       store.setCodeCheckResults(result.code_check ?? null);
       store.setAnalysisResults(result.analysis_result ?? null);
@@ -130,7 +131,7 @@ function runPipelineBackground(params: RunPipelineParams) {
     }
   }).catch(err => {
     store.setIsRunning(false);
-    store.setError('后端未启动。请运行 python servers/web_api_server.py，或使用"自动演示"查看示例效果。');
+    store.setError('后端未响应，正在自动重连...');
     console.warn('Backend unreachable:', err);
   });
 }
@@ -300,6 +301,108 @@ function EngineeringForm() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
 
+  // ── 导入已有项目 ──────────────────────────────────────────────
+  const [showImportDropdown, setShowImportDropdown] = useState(false);
+  const [projectList, setProjectList] = useState<{ file: string; project_name: string; saved_at: string; mtime: number; size: number }[]>([]);
+  const [loadingProjects, setLoadingProjects] = useState(false);
+  const [importingProject, setImportingProject] = useState(false);
+  const importRef = useRef<HTMLDivElement>(null);
+  const hasImportedResults = useRef(false);
+  const formModifiedAfterImport = useRef(false);
+
+  const fetchProjects = useCallback(async () => {
+    setLoadingProjects(true);
+    try {
+      const res = await api.projectList();
+      setProjectList(res.projects || []);
+    } catch {
+      setProjectList([]);
+    } finally {
+      setLoadingProjects(false);
+    }
+  }, []);
+
+  const importProject = useCallback(async (filename: string) => {
+    setImportingProject(true);
+    try {
+      const res = await api.projectLoad(filename);
+      const data = res.data as Record<string, any>;
+      const input = data?.input || {};
+      const geo = input.geometry || {};
+      const sec = input.sections || {};
+      const loads = input.loads || {};
+      const output = data?.output || {};
+      const outSummary = output.summary || {};
+
+      setForm({
+        grid_x: (geo.grid_x || [6, 6, 6]).join(','),
+        grid_y: (geo.grid_y || [6, 6, 6]).join(','),
+        num_stories: String(geo.num_stories || 4),
+        story_heights: (geo.story_heights || [4.5, 3.6, 3.6, 3.6]).join(','),
+        column_section: sec.column || 'HW400x400x13x21',
+        beam_section: sec.beam || 'HM390x300x10x16',
+        material: sec.material || 'Q355',
+        dead_load: String(loads.dead_load ?? 2.0),
+        live_load: String(loads.live_load ?? 3.0),
+        wind_pressure: String(loads.wind_pressure ?? 0.45),
+        seismic_intensity: String(loads.seismic_intensity ?? 0.08),
+        name: data?.metadata?.project_name || '',
+      });
+      setActivePreset(null);
+      setValidationErrors({});
+      setShowImportDropdown(false);
+
+      // 加载已有输出数据到 store，避免重复计算
+      const elements = output.code_check_elements || [];
+      if (elements.length > 0 || outSummary.total_elements > 0) {
+        const store = useStore.getState();
+        store.setCodeCheckResults({
+          summary: {
+            total_elements: outSummary.total_elements ?? elements.length,
+            passed: outSummary.passed_count ?? 0,
+            failed: outSummary.failed_count ?? 0,
+            max_stress_ratio: outSummary.max_stress_ratio ?? 0,
+            max_deflection_ratio: outSummary.max_deflection_ratio ?? 0,
+          },
+          elements,
+        });
+        store.setAnalysisResults({
+          max_displacement: null,
+          engine: '已导入',
+          summary: { max_displacement: null },
+        });
+        store.setPipelineSteps([
+          { step: '模型生成', elements: outSummary.total_elements },
+          { step: '荷载施加' },
+          { step: '有限元分析' },
+          { step: '规范校核', passed: outSummary.passed_count, failed: outSummary.failed_count },
+          { step: '报告生成' },
+        ]);
+        store.setPipelineActiveIndex(4);
+        store.setPipelineProgress(100);
+        hasImportedResults.current = true;
+        formModifiedAfterImport.current = false;
+      }
+    } catch {
+      // 加载失败静默处理
+    } finally {
+      setImportingProject(false);
+    }
+  }, []);
+
+  // 点击外部关闭下拉菜单
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (importRef.current && !importRef.current.contains(e.target as Node)) {
+        setShowImportDropdown(false);
+      }
+    };
+    if (showImportDropdown) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showImportDropdown]);
+
   // ── 后端连接状态检测（积极重连） ────────────────────────────
   const [backendStatus, setBackendStatus] = useState<'checking' | 'connected' | 'disconnected'>('checking');
   const [retryCount, setRetryCount] = useState(0);
@@ -309,31 +412,28 @@ function EngineeringForm() {
     try {
       const res = await api.health();
       if (res.status === 'ok') {
-        setBackendStatus('connected');
+        setBackendStatus(prev => {
+          if (prev !== 'connected') {
+            useStore.getState().setError(null); // 后端恢复后清除报错
+          }
+          return 'connected';
+        });
         setRetryCount(0);
-        if (retryTimerRef.current) {
-          clearInterval(retryTimerRef.current);
-          retryTimerRef.current = null;
-        }
       }
     } catch {
-      // 连接失败 — 由轮询机制继续重试
+      setBackendStatus('disconnected');
     }
   }, []);
 
-  // 初始检测：先无状态地试一次
+  // 持续检测后端连接，永不停止
   useEffect(() => {
     checkBackend();
-    // 每 2 秒积极重试，无论当前状态
     const interval = setInterval(() => {
       checkBackend();
       setRetryCount(c => c + 1);
-    }, 2000);
+    }, 3000);
     retryTimerRef.current = interval;
-    return () => {
-      clearInterval(interval);
-      if (retryTimerRef.current) clearInterval(retryTimerRef.current);
-    };
+    return () => clearInterval(interval);
   }, [checkBackend]);
 
   // Validation
@@ -379,6 +479,14 @@ function EngineeringForm() {
     setError(null);
     setValidationErrors({});
 
+    // 导入的项目有已有结果且表单未修改，直接跳到探索页
+    if (hasImportedResults.current && !formModifiedAfterImport.current) {
+      hasImportedResults.current = false;
+      setIsSubmitting(false);
+      useStore.getState().setStep('explore');
+      return;
+    }
+
     const stepNames = ['模型生成', '荷载施加', '有限元分析', '规范校核', '报告生成'];
     setPipelineSteps(stepNames.map(s => ({ step: s })));
     setPipelineActiveIndex(0);
@@ -408,10 +516,12 @@ function EngineeringForm() {
     });
     setActivePreset(idx);
     setValidationErrors({});
+    if (hasImportedResults.current) formModifiedAfterImport.current = true;
   };
 
   const updateField = (key: string, value: string) => {
     setForm(f => ({ ...f, [key]: value }));
+    if (hasImportedResults.current) formModifiedAfterImport.current = true;
     // Clear error on edit
     if (validationErrors[key]) {
       setValidationErrors(e => { const n = { ...e }; delete n[key]; return n; });
@@ -424,14 +534,73 @@ function EngineeringForm() {
       <div className="flex-1 overflow-y-auto space-y-4 scroll-smooth px-5">
         {/* Section header */}
       <div className="flex items-center justify-between">
-        <div>
-          <h3 className="text-sm font-semibold text-white flex items-center gap-2">
-            <Cpu size={16} className="text-cyan" />
-            结构参数
-          </h3>
-          <p className="text-[10px] text-gray-500 mt-0.5">配置钢框架的几何与材料参数</p>
+        <div className="flex items-center gap-[8em]">
+          <div>
+            <h3 className="text-sm font-semibold text-white flex items-center gap-2">
+              <Cpu size={16} className="text-cyan" />
+              结构参数
+            </h3>
+            <p className="text-[10px] text-gray-500 mt-0.5">配置钢框架的几何与材料参数</p>
+          </div>
+          {/* 导入已有项目 */}
+          <div ref={importRef} className="relative">
+            <button
+              onClick={() => {
+                if (!showImportDropdown) fetchProjects();
+                setShowImportDropdown(!showImportDropdown);
+              }}
+              disabled={importingProject}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 text-[11px] text-cyan/80 border border-cyan/30 rounded-md
+                         hover:bg-cyan/10 hover:border-cyan/50 transition-all duration-200 whitespace-nowrap
+                         disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {importingProject ? (
+                <Loader2 size={13} className="animate-spin" />
+              ) : (
+                <FolderOpen size={13} />
+              )}
+              导入已有项目
+              <ChevronDown size={10} className={`transition-transform duration-200 ${showImportDropdown ? 'rotate-180' : ''}`} />
+            </button>
+
+            {/* 下拉菜单 */}
+            {showImportDropdown && (
+              <div className="absolute left-0 top-full mt-1.5 w-72 bg-slate-900 border border-white/10 rounded-lg shadow-2xl
+                              z-50 max-h-64 overflow-y-auto animate-slide-down">
+                {loadingProjects ? (
+                  <div className="flex items-center justify-center gap-2 py-6 text-gray-500 text-[11px]">
+                    <Loader2 size={14} className="animate-spin" />
+                    加载历史项目...
+                  </div>
+                ) : projectList.length === 0 ? (
+                  <div className="py-6 text-center text-gray-500 text-[11px]">
+                    <FolderOpen size={20} className="mx-auto mb-1.5 opacity-40" />
+                    暂无历史项目
+                    <p className="text-[10px] mt-0.5 opacity-60">运行管道后将自动保存</p>
+                  </div>
+                ) : (
+                  projectList.map((proj) => (
+                    <button
+                      key={proj.file}
+                      onClick={() => importProject(proj.file)}
+                      className="w-full text-left px-3.5 py-2.5 hover:bg-white/5 transition-colors border-b border-white/5
+                                 last:border-b-0 flex items-start gap-2.5"
+                    >
+                      <Download size={13} className="text-cyan/60 mt-0.5 shrink-0" />
+                      <div className="min-w-0">
+                        <div className="text-[12px] text-gray-200 truncate">{proj.project_name}</div>
+                        <div className="text-[10px] text-gray-500 mt-0.5">
+                          {proj.saved_at ? new Date(proj.saved_at).toLocaleString('zh-CN') : '未知时间'}
+                        </div>
+                      </div>
+                    </button>
+                  ))
+                )}
+              </div>
+            )}
+          </div>
         </div>
-        <span className="text-[10px] text-gray-600 font-mono">
+        <span className="text-[10px] text-gray-600 font-mono shrink-0">
           v2.0
         </span>
       </div>
@@ -602,7 +771,7 @@ function EngineeringForm() {
 
       {/* Fixed bottom: submit + auto demo */}
       <div className="px-5 py-4 border-t border-white/5 bg-[#0a0b0d]/95 shrink-0">
-        {/* Engine status */}
+        {/* Engine status — 持续检测，自动重连 */}
         <div className="flex items-center justify-between mb-2.5 px-1">
           <div className="flex items-center gap-2">
           {backendStatus === 'connected' ? (
@@ -610,10 +779,15 @@ function EngineeringForm() {
               <span className="w-2 h-2 rounded-full bg-green-400 shadow-[0_0_6px_rgba(50,204,100,0.5)]" />
               <span className="text-[10px] text-green-400/70">服务端模式</span>
             </>
+          ) : backendStatus === 'checking' ? (
+            <>
+              <span className="w-2 h-2 rounded-full bg-yellow-400/70 animate-pulse" />
+              <span className="text-[10px] text-yellow-400/60">检测中...</span>
+            </>
           ) : (
             <>
               <span className="w-2 h-2 rounded-full bg-red-400/50" />
-              <span className="text-[10px] text-gray-500">后端未连</span>
+              <span className="text-[10px] text-gray-500">后端未连 (第{retryCount}次重试，自动拉起中...)</span>
             </>
           )}
           </div>
@@ -786,7 +960,8 @@ function LLMChat() {
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    const el = chatEndRef.current;
+    if (el) el.parentElement?.scrollTo({ top: el.parentElement.scrollHeight, behavior: 'smooth' });
   }, [messages, llmResponse]);
 
   const handleStartModeling = () => {
