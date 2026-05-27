@@ -16,26 +16,38 @@ interface DockPanelProps {
   icon?: React.ReactNode;
   /** Start expanded instead of collapsed (default: false) */
   startExpanded?: boolean;
+  /** Remove glass background, border, shadow (panel content provides its own styling) */
+  noFrame?: boolean;
 }
 
 const SNAP_THRESHOLD = 80;
 const DOCK_TOP = 112;
 const DOCK_GAP = 4;
 const COLLAPSED_TAB_SIZE = 42;
+const MIN_PANEL_WIDTH = 200;
+const MAX_PANEL_WIDTH = 800;
+const MIN_PANEL_HEIGHT = 120;
 
 export default function DockPanel({
   id, title = '', children, defaultX = 100, defaultY = 100,
-  defaultDock, width = 260, dockOnly = false, icon, startExpanded = false,
+  defaultDock, width = 260, dockOnly = false, icon, startExpanded = false, noFrame = false,
 }: DockPanelProps) {
   const dockPanels = useStore(s => s.dockPanels);
   const panelHeights = useStore(s => s.panelHeights);
+  const panelWidths = useStore(s => s.panelWidths);
   const collapsedDocked = useStore(s => s.collapsedDocked);
   const dockPanel = useStore(s => s.dockPanel);
   const undockPanel = useStore(s => s.undockPanel);
   const setPanelHeight = useStore(s => s.setPanelHeight);
+  const setPanelWidth = useStore(s => s.setPanelWidth);
   const setCollapsedDocked = useStore(s => s.setCollapsedDocked);
   const [pos, setPos] = useState({ x: defaultX, y: defaultY });
   const [snapSide, setSnapSide] = useState<'left' | 'right' | null>(null);
+  const [fixedHeight, setFixedHeight] = useState<number | null>(
+    startExpanded ? 600 : null
+  );
+  const [topOffset, setTopOffset] = useState(0);
+  const resizeRef = useRef({ startX: 0, startY: 0, startW: 0, startH: 0, mode: '' as 'h' | 'v' | 'hv' | 'vt' });
   const panelRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef({ startX: 0, startY: 0, elX: 0, elY: 0, dragging: false, wasDocked: false });
   const posRef = useRef(pos);
@@ -50,6 +62,9 @@ export default function DockPanel({
     : myDockSide === 'right'
       ? dockPanels.right.indexOf(id) : -1;
   const isCollapsed = myDockSide ? (collapsedDocked[id] ?? !startExpanded) : false;
+
+  // Actual width: store value > prop default
+  const actualWidth = panelWidths[id] ?? width;
 
   // Initialize default dock on mount, clean up on unmount
   useEffect(() => {
@@ -147,7 +162,7 @@ export default function DockPanel({
       if (!d.dragging) return;
 
       // Clamp position to keep panel visible
-      const panelW = panelRef.current?.offsetWidth ?? width;
+      const panelW = panelRef.current?.offsetWidth ?? actualWidth;
       const clampedX = Math.max(-panelW * 0.25, Math.min(window.innerWidth - 40, d.elX + dx));
       const clampedY = Math.max(0, Math.min(window.innerHeight - 60, d.elY + dy));
       setPos({ x: clampedX, y: clampedY });
@@ -181,7 +196,59 @@ export default function DockPanel({
 
     window.addEventListener('mousemove', onMove);
     window.addEventListener('mouseup', onUp);
-  }, [id, width, isCollapsed, dockPanel, undockPanel, setCollapsedDocked]);
+  }, [id, actualWidth, isCollapsed, dockPanel, undockPanel, setCollapsedDocked]);
+
+  // ── Shared resize handler (works for both docked and floating) ──
+  const onResizeStart = useCallback((
+    e: React.MouseEvent,
+    mode: 'h' | 'v' | 'hv' | 'vt',
+  ) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    const r = resizeRef.current;
+    const rect = panelRef.current?.getBoundingClientRect();
+    r.startX = e.clientX;
+    r.startY = e.clientY;
+    r.startW = rect?.width ?? actualWidth;
+    r.startH = rect?.height ?? 400;
+    r.mode = mode;
+
+    const side = myDockSideRef.current;
+    const startTopOff = topOffset;
+
+    const onMove = (ev: MouseEvent) => {
+      const dx = ev.clientX - r.startX;
+      const dy = ev.clientY - r.startY;
+
+      if (r.mode === 'h' || r.mode === 'hv') {
+        const newW = side === 'right' ? r.startW - dx : r.startW + dx;
+        setPanelWidth(id, Math.max(MIN_PANEL_WIDTH, Math.min(MAX_PANEL_WIDTH, newW)));
+      }
+
+      if (r.mode === 'v' || r.mode === 'hv') {
+        setFixedHeight(Math.max(MIN_PANEL_HEIGHT, r.startH + dy));
+      }
+
+      if (r.mode === 'vt') {
+        // Drag up (dy < 0): height grows, top edge moves up
+        // Drag down (dy > 0): height shrinks, top edge moves down
+        const newH = r.startH - dy;
+        const clampedH = Math.max(MIN_PANEL_HEIGHT, newH);
+        setFixedHeight(clampedH);
+        // Shift top so the panel extends/contracts from the top edge
+        setTopOffset(startTopOff + dy);
+      }
+    };
+
+    const onUp = () => {
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+    };
+
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+  }, [id, actualWidth, topOffset, setPanelWidth]);
 
   // ── Docked + Collapsed: prominent edge tab ──
   if (myDockSide && isCollapsed) {
@@ -222,17 +289,55 @@ export default function DockPanel({
     return (
       <div
         ref={panelRef}
-        className="fixed z-30 max-h-[85vh] flex flex-col"
-        style={{ [isLeft ? 'left' : 'right']: 0, top: dockTop, width }}
+        className="fixed z-30 flex flex-col"
+        style={{
+          [isLeft ? 'left' : 'right']: 0,
+          top: dockTop + topOffset,
+          width: actualWidth,
+          height: fixedHeight ?? undefined,
+          maxHeight: fixedHeight ? undefined : '85vh',
+        }}
       >
-        <div className="glass-strong rounded-r-xl overflow-hidden shadow-2xl border border-white/5 flex flex-col">
+        {/* Resize handles — outside glass-strong so overflow-hidden doesn't clip them */}
+        {/* Top handle — drag up to expand upward */}
+        <div
+          className="absolute inset-x-0 top-0 h-1.5 z-30 cursor-row-resize
+            transition-all duration-150
+            hover:bg-purple-400/40 active:bg-purple-400/60"
+          onMouseDown={(e) => onResizeStart(e, 'vt')}
+        />
+        <div
+          className={`absolute inset-y-0 w-1.5 z-30 cursor-col-resize
+            transition-all duration-150
+            hover:bg-purple-400/40 active:bg-purple-400/60
+            ${isLeft ? 'right-0' : 'left-0'}`}
+          onMouseDown={(e) => onResizeStart(e, 'h')}
+        />
+        {/* Bottom handle */}
+        <div
+          className="absolute inset-x-0 bottom-0 h-1.5 z-30 cursor-row-resize
+            transition-all duration-150
+            hover:bg-purple-400/40 active:bg-purple-400/60"
+          onMouseDown={(e) => onResizeStart(e, 'v')}
+        />
+        {/* Corner handle */}
+        <div
+          className={`absolute bottom-0 z-30 w-3 h-3 cursor-nwse-resize
+            transition-all duration-150
+            hover:bg-purple-400/40 active:bg-purple-400/60
+            ${isLeft ? 'right-0' : 'left-0'}`}
+          style={{ clipPath: 'polygon(100% 0, 0 100%, 100% 100%)' }}
+          onMouseDown={(e) => onResizeStart(e, 'hv')}
+        />
+
+        <div className={`${noFrame ? '' : 'glass-strong rounded-r-xl shadow-2xl border border-white/5'} flex flex-col flex-1 min-h-0`}>
           {/* Header / drag handle */}
           <div
             className="flex items-center justify-between px-3 py-1.5 cursor-grab active:cursor-grabbing hover:bg-white/5 transition-colors select-none"
             onMouseDown={onHandleDown}
           >
             <button
-              onClick={() => setCollapsedDocked(id, true)}
+              onClick={() => { setCollapsedDocked(id, true); setTopOffset(0); }}
               className="text-gray-500 hover:text-gray-300 transition-colors p-0.5 shrink-0 mr-1"
               title="折叠"
             >
@@ -249,8 +354,8 @@ export default function DockPanel({
               <X size={11} />
             </button>
           </div>
-          {/* Content */}
-          <div className="overflow-y-auto flex-1 min-h-0">
+          {/* Content — flex-col so children (ResultsPanel) get a definite flex-1 height */}
+          <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
             {children}
           </div>
         </div>
@@ -266,16 +371,37 @@ export default function DockPanel({
       {/* Snap indicator — glowing edge line */}
       {snapSide && (
         <div className="fixed inset-0 z-40 pointer-events-none">
-          <div className={`absolute inset-y-24 w-0.5 ${snapSide === 'left' ? 'left-0' : 'right-0'} bg-cyan/50 shadow-lg shadow-cyan/30`} />
+          <div className={`absolute inset-y-24 w-0.5 ${snapSide === 'left' ? 'left-0' : 'right-0'} bg-purple-400/50 shadow-lg shadow-purple-400/30`} />
         </div>
       )}
 
       <div
         ref={panelRef}
         className="fixed z-30"
-        style={{ left: pos.x, top: pos.y }}
+        style={{ left: pos.x, top: pos.y, width: actualWidth }}
       >
-        <div className="glass-strong rounded-xl overflow-hidden shadow-2xl border border-white/5">
+        {/* Resize handles */}
+        <div
+          className="absolute inset-y-0 right-0 w-1.5 z-30 cursor-col-resize
+            transition-all duration-150
+            hover:bg-purple-400/40 active:bg-purple-400/60"
+          onMouseDown={(e) => onResizeStart(e, 'h')}
+        />
+        <div
+          className="absolute inset-x-0 bottom-0 h-1.5 z-30 cursor-row-resize
+            transition-all duration-150
+            hover:bg-purple-400/40 active:bg-purple-400/60"
+          onMouseDown={(e) => onResizeStart(e, 'v')}
+        />
+        <div
+          className="absolute bottom-0 right-0 w-3 h-3 z-30 cursor-nwse-resize
+            transition-all duration-150
+            hover:bg-purple-400/40 active:bg-purple-400/60"
+          style={{ clipPath: 'polygon(100% 0, 0 100%, 100% 100%)' }}
+          onMouseDown={(e) => onResizeStart(e, 'hv')}
+        />
+
+        <div className="glass-strong rounded-xl shadow-2xl border border-white/5">
           {/* Drag handle */}
           <div
             className="flex items-center justify-between px-3 py-1 cursor-grab active:cursor-grabbing rounded-t-lg bg-white/[0.03] hover:bg-white/[0.06] transition-colors select-none"
