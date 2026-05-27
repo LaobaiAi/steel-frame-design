@@ -13,7 +13,7 @@ interface EngParams {
 }
 interface MockNode { id: number; x: number; y: number; z: number }
 interface MockElement { id: number; node_i: number; node_j: number; type: string; section: string }
-interface MockColorEntry { color: string; stress_ratio: number; stability_ratio: number; pass: boolean }
+interface MockColorEntry { color: string; stress_ratio: number; stability_ratio: number; deflection_ratio: number; slenderness_ratio: number; pass: boolean }
 interface MockSupport { node_id: number; dof: [boolean, boolean, boolean, boolean, boolean, boolean] }
 interface MockArrow { position: [number, number, number]; direction: [number, number, number]; magnitude: number; type: string }
 interface MockData {
@@ -67,14 +67,28 @@ function generateModel(params: EngParams): MockData {
   // Deformed nodes: only deform if we have real data, otherwise keep original
   const deformedNodes = nodes.map(n => ({ ...n }));
 
-  // Color map with real data from store, or neutral
+  // Color map: deterministic mock stress ratios based on position
+  // Lower floors and outer columns get higher ratios for realism
   const colorMap: Record<string, MockColorEntry> = {};
   elements.forEach(el => {
+    const ni = nodes[el.node_i], nj = nodes[el.node_j];
+    const midZ = ni && nj ? (ni.z + nj.z) / 2 : 0;
+    const maxZ = posZ[nz] || 1;
+    // Floor factor: lower floors = higher stress
+    const floorFactor = 1 - midZ / maxZ * 0.7;
+    // Position jitter for variety
+    const jitter = ((el.id * 7 + el.type.length * 13) % 100) / 500;
+    const mockRatio = Math.min(1.05, Math.max(0.08, floorFactor * 0.7 + jitter));
+    const stab = Math.max(0, mockRatio * 0.85);
+    const defl = Math.max(0, mockRatio * 0.4);
+    const slen = Math.max(10, mockRatio * 80);
     colorMap[String(el.id)] = {
-      color: '#4488ff',
-      stress_ratio: 0,
-      stability_ratio: 0,
-      pass: true,
+      color: stressToColor(mockRatio),
+      stress_ratio: mockRatio,
+      stability_ratio: stab,
+      deflection_ratio: defl,
+      slenderness_ratio: slen,
+      pass: mockRatio <= 1.0,
     };
   });
 
@@ -124,12 +138,11 @@ const DEFAULT_DATA = generateDefaultData();
 
 // ── Stress-to-Color mapping ───────────────────────────────────
 
-function stressToColor(ratio: number): string {
-  if (ratio > 1.0) return '#CC0020';
-  if (ratio > 0.85) return '#FF4400';
-  if (ratio > 0.65) return '#FF8800';
-  if (ratio > 0.45) return '#FFCC00';
-  if (ratio > 0.25) return '#AADD00';
+function stressToColor(ratio: number, safeLimit = 0.8, criticalLimit = 1.0): string {
+  if (ratio > criticalLimit)        return '#FF4400';
+  if (ratio > criticalLimit - 0.15) return '#FF8800';
+  if (ratio > safeLimit + 0.05)     return '#FFCC00';
+  if (ratio > safeLimit - 0.15)     return '#AADD00';
   return '#32CC66';
 }
 
@@ -141,7 +154,7 @@ const _up = new THREE.Vector3(0, 1, 0);
 function AnimatedBeam({ ni, nj, color, secH = 0.35, secB = 0.3, opacity = 1, emissive = false, delay = 0, animationType = 'drop', displayMode = 'shaded', section = '', isSelected = false, onSelect }: {
   ni: THREE.Vector3; nj: THREE.Vector3; color: string; secH?: number; secB?: number;
   opacity?: number; emissive?: boolean; delay?: number; animationType?: 'drop' | 'slide' | 'rise' | 'lift' | 'none';
-  displayMode?: string; section?: string; isSelected?: boolean; onSelect?: () => void;
+  displayMode?: string; section?: string; isSelected?: boolean; onSelect?: (mods: { ctrlKey: boolean; shiftKey: boolean }) => void;
 }) {
   const ref = useRef<THREE.Group>(null);
   const phaseInit = animationType === 'none' ? 'placed' as const : 'entering' as const;
@@ -257,7 +270,8 @@ function AnimatedBeam({ ni, nj, color, secH = 0.35, secB = 0.3, opacity = 1, emi
   });
 
   const selOpacity = isSelected ? 1 : matOpacity;
-  const selEmissive = isSelected ? new THREE.Color('#00D4FF') : (emissive ? col : '#000000');
+  const SEL_COLOR = '#9C27B0';
+  const selEmissive = isSelected ? new THREE.Color(SEL_COLOR) : (emissive ? col : '#000000');
   const selEmissiveIntensity = isSelected ? glowIntensity : (emissive ? 0.3 : 0);
 
   return (
@@ -266,7 +280,7 @@ function AnimatedBeam({ ni, nj, color, secH = 0.35, secB = 0.3, opacity = 1, emi
         <mesh
           castShadow={!isWireframe} receiveShadow={!isWireframe}
           geometry={renderGeom}
-          onClick={(e) => { e.stopPropagation(); onSelect?.(); }}
+          onClick={(e) => { e.stopPropagation(); onSelect?.({ ctrlKey: (e as any).nativeEvent?.ctrlKey ?? false, shiftKey: (e as any).nativeEvent?.shiftKey ?? false }); }}
         >
           {isWireframe ? (
             <meshStandardMaterial color="#00D4FF" wireframe metalness={0} roughness={0.8} transparent opacity={0.4} />
@@ -285,12 +299,12 @@ function AnimatedBeam({ ni, nj, color, secH = 0.35, secB = 0.3, opacity = 1, emi
         </lineSegments>
       ) : (
         <lineSegments geometry={edgesGeom!}>
-          <lineBasicMaterial color={isSelected ? '#00D4FF' : '#ffffff'} transparent opacity={isSelected ? 0.9 : 0.12 * selOpacity} />
+          <lineBasicMaterial color={isSelected ? SEL_COLOR : '#ffffff'} transparent opacity={isSelected ? 0.9 : 0.12 * selOpacity} />
         </lineSegments>
       )}
       {/* X-ray transparent fill */}
       {isXray && (
-        <mesh geometry={renderGeom} onClick={(e) => { e.stopPropagation(); onSelect?.(); }}>
+        <mesh geometry={renderGeom} onClick={(e) => { e.stopPropagation(); onSelect?.({ ctrlKey: (e as any).nativeEvent?.ctrlKey ?? false, shiftKey: (e as any).nativeEvent?.shiftKey ?? false }); }}>
           <meshStandardMaterial color={col} transparent opacity={0.08 * selOpacity} depthWrite={false} />
         </mesh>
       )}
@@ -298,10 +312,10 @@ function AnimatedBeam({ ni, nj, color, secH = 0.35, secB = 0.3, opacity = 1, emi
       {isSelected && !isXray && !isWireframe && renderGeom && (
         <group scale={[1.06, 1.06, 1.06]}>
           <mesh geometry={renderGeom}>
-            <meshBasicMaterial color="#00D4FF" transparent opacity={0.2 + glowIntensity * 0.12} depthWrite={false} />
+            <meshBasicMaterial color={SEL_COLOR} transparent opacity={0.2 + glowIntensity * 0.12} depthWrite={false} />
           </mesh>
           <lineSegments geometry={edgesGeom!}>
-            <lineBasicMaterial color="#00D4FF" transparent opacity={1.0} />
+            <lineBasicMaterial color={SEL_COLOR} transparent opacity={1.0} />
           </lineSegments>
         </group>
       )}
@@ -311,12 +325,15 @@ function AnimatedBeam({ ni, nj, color, secH = 0.35, secB = 0.3, opacity = 1, emi
 
 // ── Frame Model ────────────────────────────────────────────────
 
-function FrameModel({ data, showColorMap, currentStep, buildPhase, animate = false, displayMode = 'shaded', explodeFactor = 0, selectedElement, setSelectedElement }: {
+function FrameModel({ data, showColorMap, currentStep, buildPhase, animate = false, displayMode = 'shaded', explodeFactor = 0 }: {
   data: MockData; showColorMap: boolean; currentStep: string; buildPhase: number; animate?: boolean;
   displayMode?: string; explodeFactor?: number;
-  selectedElement?: number | null;
-  setSelectedElement?: (id: number | null) => void;
 }) {
+  const colorMode = useStore(s => s.colorMode);
+  const selectedElements = useStore(s => s.selectedElements);
+  const setSelectedElements = useStore(s => s.setSelectedElements);
+  const addSelectedElement = useStore(s => s.addSelectedElement);
+  const removeSelectedElement = useStore(s => s.removeSelectedElement);
   const nodeMap = useMemo(() => new Map(data.nodes.map((n: MockNode) => [n.id, new THREE.Vector3(n.x, n.y, n.z)])), [data]);
 
   // 获取所有楼层高度
@@ -375,7 +392,8 @@ function FrameModel({ data, showColorMap, currentStep, buildPhase, animate = fal
 
   function renderEl(el: MockElement, ni: THREE.Vector3, nj: THREE.Vector3, isColumn: boolean, floorIdx: number) {
     const cmap = data.color_map?.[String(el.id)];
-    const ratio = cmap?.stress_ratio ?? 0.5;
+    const raw = cmap ? (cmap as any)[colorMode] ?? 0.5 : 0.5;
+    const ratio = colorMode === 'slenderness_ratio' ? raw / 150 : raw;
     const isHighStress = ratio > 0.8;
     // 建模阶段：按楼层配色（视觉分层清晰）；其余阶段：应力比配色或构件类型默认色
     const isModeling = currentStep === 'modeling';
@@ -386,8 +404,8 @@ function FrameModel({ data, showColorMap, currentStep, buildPhase, animate = fal
     const secH = isColumn ? (sd?.height ?? 0.4) : (sd?.height ?? 0.34);
     const secB = isColumn ? (sd?.width ?? 0.4) : (sd?.width ?? 0.28);
     // Dim non-selected elements when something is selected
-    const isThisSelected = selectedElement === el.id;
-    const hasSelection = selectedElement != null;
+    const isThisSelected = selectedElements.includes(el.id);
+    const hasSelection = selectedElements.length > 0;
     const dimOpacity = hasSelection && !isThisSelected ? 0.65 : 1;
 
     if (animate) {
@@ -398,7 +416,11 @@ function FrameModel({ data, showColorMap, currentStep, buildPhase, animate = fal
           <AnimatedBeam key={el.id} ni={ni} nj={nj} color={color} secH={secH} secB={secB}
             opacity={dimOpacity} emissive={isHighStress && currentStep === 'check'}
             delay={floorBaseDelay} animationType="rise" displayMode={displayMode} section={el.section}
-            isSelected={isThisSelected} onSelect={() => setSelectedElement?.(el.id)} />
+            isSelected={isThisSelected} onSelect={(mods) => {
+              if (mods.ctrlKey) addSelectedElement(el.id);
+              else if (mods.shiftKey) removeSelectedElement(el.id);
+              else setSelectedElements([el.id]);
+            }} />
         );
       } else {
         // 梁从下方向上吊装（从左到右、从下到上扫描）
@@ -418,7 +440,11 @@ function FrameModel({ data, showColorMap, currentStep, buildPhase, animate = fal
           <AnimatedBeam key={el.id} ni={eni} nj={enj} color={color} secH={secH} secB={secB}
             opacity={dimOpacity} emissive={isHighStress && currentStep === 'check'}
             delay={beamDelay} animationType="lift" displayMode={displayMode} section={el.section}
-            isSelected={isThisSelected} onSelect={() => setSelectedElement?.(el.id)} />
+            isSelected={isThisSelected} onSelect={(mods) => {
+              if (mods.ctrlKey) addSelectedElement(el.id);
+              else if (mods.shiftKey) removeSelectedElement(el.id);
+              else setSelectedElements([el.id]);
+            }} />
         );
       }
     }
@@ -430,7 +456,11 @@ function FrameModel({ data, showColorMap, currentStep, buildPhase, animate = fal
       <AnimatedBeam key={el.id} ni={eni} nj={enj} color={color} secH={secH} secB={secB}
         opacity={dimOpacity} emissive={isHighStress && currentStep === 'check'}
         delay={0} animationType="none" displayMode={displayMode} section={el.section}
-        isSelected={selectedElement === el.id} onSelect={() => setSelectedElement?.(el.id)} />
+        isSelected={isThisSelected} onSelect={(mods) => {
+          if (mods.ctrlKey) addSelectedElement(el.id);
+          else if (mods.shiftKey) removeSelectedElement(el.id);
+          else setSelectedElements([el.id]);
+        }} />
     );
   }
 
@@ -830,7 +860,7 @@ export default function ThreeCanvas() {
   const {
     threeDData, currentStep, showColorMap, deformationScale, engineeringParams,
     displayMode, sectionPlane, explodeFactor, showGrid, showShadows, autoRotate,
-    setAutoRotate, selectedElement, setSelectedElement,
+    setAutoRotate,
   } = useStore();
   const [buildPhase, setBuildPhase] = useState(0);
   const controlsRef = useRef<any>(null);
@@ -921,8 +951,7 @@ export default function ThreeCanvas() {
           {currentStep !== 'analysis' ? (
             <FrameModel data={data} showColorMap={showColorMap} currentStep={currentStep}
               buildPhase={buildPhase} animate={currentStep === 'modeling'}
-              displayMode={displayMode} explodeFactor={explodeFactor}
-              selectedElement={selectedElement} setSelectedElement={setSelectedElement} />
+              displayMode={displayMode} explodeFactor={explodeFactor} />
           ) : (
             <>
               <ModalVibration data={data} />
