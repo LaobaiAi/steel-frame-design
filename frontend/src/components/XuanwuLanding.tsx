@@ -108,12 +108,13 @@ function Header() {
 function Hero() {
   const { setStep } = useStore();
   const [mounted, setMounted] = useState(false);
+
   useEffect(() => { setMounted(true); }, []);
 
   return (
-    <section className="relative min-h-screen flex flex-col items-center justify-center overflow-hidden" style={{ background: BG2 }}>
+    <section className="relative min-h-screen flex flex-col items-center overflow-hidden pt-32 md:pt-40" style={{ background: BG2 }}>
       {/* Glow */}
-      <div className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[700px] h-[700px] rounded-full opacity-[0.15]"
+      <div className="absolute top-[15%] left-1/2 -translate-x-1/2 -translate-y-1/2 w-[700px] h-[700px] rounded-full opacity-[0.15]"
         style={{ background: 'radial-gradient(circle, rgba(50,240,140,0.4) 0%, transparent 70%)', filter: 'blur(80px)' }} />
 
       <div className="relative z-10 flex flex-col items-center text-center px-4 max-w-5xl mx-auto">
@@ -162,6 +163,7 @@ function Hero() {
         style={{ opacity: mounted ? 1 : 0, transition: 'all 0.6s ease-out 0.8s' }}>
         <ChevronDown size={20} className="text-[#787d87] animate-bounce" />
       </div>
+
     </section>
   );
 }
