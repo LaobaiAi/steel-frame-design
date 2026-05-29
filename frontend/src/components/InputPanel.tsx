@@ -127,11 +127,11 @@ function runPipelineBackground(params: RunPipelineParams) {
       store.setPipelineActiveIndex(4);
       store.setPipelineProgress(100);
     } else {
-      store.setError('流水线运行失败');
+      store.setError(result.message || '流水线运行失败');
     }
   }).catch(err => {
     store.setIsRunning(false);
-    store.setError('后端未响应，正在自动重连...');
+    store.setError(`流水线失败: ${err.message || err}`);
     console.warn('Backend unreachable:', err);
   });
 }

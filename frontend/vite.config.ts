@@ -19,7 +19,7 @@ function autoStartBackend(): Plugin {
     }
 
     console.log('[auto-backend] 正在启动后端...')
-    backend = spawn('python', [BACKEND_SCRIPT], {
+    backend = spawn('python', [`"${BACKEND_SCRIPT}"`], {
       cwd: ROOT_DIR,
       stdio: 'pipe',
       shell: true,

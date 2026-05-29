@@ -28,6 +28,9 @@ projects/
 .firecrawl/
 memory/
 
+# Node / npm
+package-lock.json
+
 # Build
 steel_frame_app.spec
 
