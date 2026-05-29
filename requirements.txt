@@ -6,3 +6,4 @@ jsonschema>=4.17
 requests>=2.28
 fastapi>=0.130
 uvicorn>=0.27
+openseespy>=3.5

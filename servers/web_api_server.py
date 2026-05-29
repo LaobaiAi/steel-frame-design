@@ -243,9 +243,15 @@ async def startup():
     # ── 注册子进程计算型 Server ─────────────────────────────────
     # 计算型 Server 以独立子进程运行，实现进程隔离：
     #   求解器崩溃 → 只杀子进程，不影响 Gateway 主进程
+    # 优先使用 .venv_opensees，回退到当前 Python 解释器
+    _venv_python = os.path.join(_ROOT, ".venv_opensees", "Scripts", "python.exe")
+    if not os.path.exists(_venv_python):
+        _venv_python = sys.executable
+        print(f"[WebAPI] .venv_opensees 不存在，使用当前 Python: {_venv_python}")
+
     hub.register_subprocess({
         "name": "fea_runner",
-        "command": os.path.join(_ROOT, ".venv_opensees", "Scripts", "python.exe"),
+        "command": _venv_python,
         "args": ["-u", "-m", "servers.opensees_runner"],
         "cwd": _ROOT,
         "lazy": True,           # 首次 call_tool 时才启动子进程
