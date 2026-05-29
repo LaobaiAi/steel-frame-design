@@ -1,6 +1,6 @@
-import { useRef, useMemo, useEffect, useState, Suspense } from 'react';
+import React, { useRef, useMemo, useEffect, useState, Suspense } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
-import { OrbitControls, Environment, Text, Billboard } from '@react-three/drei';
+import { OrbitControls, Text, Billboard, Environment } from '@react-three/drei';
 import * as THREE from 'three';
 import { useStore } from '../store/useStore';
 import { createHBeamGeometry } from '../utils/beamGeometry';
@@ -767,6 +767,65 @@ function ModalVibration({ data }: { data: MockData }) {
   return <group ref={ref}><FrameModel data={data} showColorMap={false} currentStep="analysis" buildPhase={1} animate={false} /></group>;
 }
 
+// ── Error Boundary: catch CDN load failures ────────────────
+
+class EnvErrorBoundary extends React.Component<
+  { fallback: React.ReactNode; children: React.ReactNode },
+  { hasError: boolean }
+> {
+  state = { hasError: false };
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+  componentDidCatch(error: Error) {
+    console.warn('[ThreeCanvas] Environment CDN 加载失败，降级到 ProceduralEnv:', error.message);
+  }
+  render() {
+    if (this.state.hasError) return this.props.fallback;
+    return this.props.children;
+  }
+}
+
+// ── Env with CDN-first, procedural fallback ─────────────────
+
+function EnvWithFallback() {
+  return (
+    <EnvErrorBoundary fallback={<ProceduralEnv />}>
+      <Suspense fallback={null}>
+        <Environment preset="city" background={false} />
+      </Suspense>
+    </EnvErrorBoundary>
+  );
+}
+
+// ── Procedural Env Map (no CDN dependency) ──────────────────
+
+function ProceduralEnv() {
+  const { scene, gl } = useThree();
+  useEffect(() => {
+    const envScene = new THREE.Scene();
+    // gradient hemisphere-like background
+    const canvas = document.createElement('canvas');
+    canvas.width = 512; canvas.height = 256;
+    const ctx = canvas.getContext('2d')!;
+    const grad = ctx.createLinearGradient(0, 0, 0, 256);
+    grad.addColorStop(0, '#4488cc');
+    grad.addColorStop(0.5, '#223355');
+    grad.addColorStop(1, '#111122');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, 512, 256);
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.mapping = THREE.EquirectangularReflectionMapping;
+    const pmrem = new THREE.PMREMGenerator(gl);
+    const envMap = pmrem.fromEquirectangular(texture).texture;
+    scene.environment = envMap;
+    scene.backgroundBlurriness = 0;
+    texture.dispose();
+    pmrem.dispose();
+  }, [scene, gl]);
+  return null;
+}
+
 // ── Lights ───────────────────────────────────────────────────
 
 function Lights({ shadows = true }: { shadows?: boolean }) {
@@ -923,9 +982,7 @@ export default function ThreeCanvas() {
       <ViewController controlsRef={controlsRef} center={data.bounding_box.center} boundingBox={data.bounding_box} />
       <CameraSetup boundingBox={data.bounding_box} />
 
-      <Suspense fallback={null}>
-        <Environment preset="city" background={false} />
-      </Suspense>
+      <EnvWithFallback />
       <Lights shadows={showShadows} />
       {showGrid && <Ground bb={data.bounding_box} />}
 
