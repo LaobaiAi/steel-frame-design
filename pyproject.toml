@@ -1,0 +1,57 @@
+# ============================================================
+# CAIAO Steel Frame Design — Python 工具链配置
+# ============================================================
+
+[tool.ruff]
+target-version = "py310"
+line-length = 100
+
+[tool.ruff.lint]
+select = [
+    # pyflakes
+    "F",
+    # pycodestyle
+    "E", "W",
+    # isort
+    "I",
+    # bugbear
+    "B",
+    # flake8-comprehensions
+    "C4",
+    # flake8-simplify
+    "SIM",
+    # eradicate (dead code)
+    "ERA",
+]
+ignore = [
+    # 行太长 (交给 formatter)
+    "E501",
+    # 变量名太短 (OpenSees 代码中常见如 x,y,z)
+    "F403", "F405",
+]
+exclude = [
+    ".venv",
+    ".venv_opensees",
+    "__pycache__",
+    "frontend",
+    "output",
+    "projects",
+    "dev-notes",
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["servers"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+
+[tool.bandit]
+exclude_dirs = [".venv", ".venv_opensees", "tests", "frontend", "output", "projects", "dev-notes"]
+skips = ["B101", "B311"]  # assert, random — 测试中合理使用
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+timeout = 120

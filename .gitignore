@@ -16,6 +16,7 @@ build/
 .venv_opensees/
 venv/
 env/
+.ruff_cache/
 
 # Dev Notes (local only)
 dev-notes/

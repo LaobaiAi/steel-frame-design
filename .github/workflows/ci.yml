@@ -1,0 +1,100 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ============================================================
+  # Python: lint + tests
+  # ============================================================
+  python:
+    name: Python ${{ matrix.python-version }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ['3.10', '3.11', '3.12']
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Lint with ruff
+        run: |
+          pip install ruff
+          ruff check servers/ tests/ caiao_hub.py cli/ --output-format=github
+        continue-on-error: true
+
+      - name: Run tests
+        run: python tests/test_servers.py
+        timeout-minutes: 10
+
+  # ============================================================
+  # Frontend: lint + type-check + build
+  # ============================================================
+  frontend:
+    name: Frontend (lint + build)
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: |
+          cd frontend
+          npm install
+        # 注: package-lock.json 在 .gitignore 中，故用 install 而非 ci
+
+      - name: Lint
+        run: cd frontend && npm run lint
+
+      - name: TypeScript type-check
+        run: cd frontend && npx tsc --noEmit
+
+      - name: Build
+        run: cd frontend && npm run build
+
+  # ============================================================
+  # 汇总状态 (合并检查)
+  # ============================================================
+  all-checks:
+    name: All Checks Passed
+    needs: [python, frontend]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require success
+        run: |
+          if [[ "${{ needs.python.result }}" != "success" ]]; then
+            echo "❌ Python checks failed"
+            exit 1
+          fi
+          if [[ "${{ needs.frontend.result }}" != "success" ]]; then
+            echo "❌ Frontend checks failed"
+            exit 1
+          fi
+          echo "✅ All checks passed"
