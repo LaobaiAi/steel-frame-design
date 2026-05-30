@@ -93,8 +93,8 @@ class SteelLoadGenerator(CAIAOServer):
 
         # ── 确定网格参数 ─────────────────────────────────────
         # 从节点坐标推算实际柱距（用于从属宽度）
-        x_coords = sorted(set(n["x"] for n in nodes))
-        y_coords = sorted(set(n["y"] for n in nodes))
+        x_coords = sorted({n["x"] for n in nodes})
+        y_coords = sorted({n["y"] for n in nodes})
         grid_spacing_x = [x_coords[i+1] - x_coords[i] for i in range(len(x_coords)-1)]
         grid_spacing_y = [y_coords[i+1] - y_coords[i] for i in range(len(y_coords)-1)]
         avg_spacing_x = sum(grid_spacing_x) / len(grid_spacing_x) if grid_spacing_x else 6.0

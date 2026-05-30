@@ -409,7 +409,7 @@ class SteelCodeCheck(CAIAOServer):
         nodes = model["nodes"]
         node_coords = {n["id"]: (n["x"], n["y"], n["z"]) for n in nodes}
 
-        z_set = sorted(set(round(n["z"], 3) for n in nodes))
+        z_set = sorted({round(n["z"], 3) for n in nodes})
         z_levels = [z for z in z_set if z > 0.01]
 
         def get_story(el_type: str, ni_z: float, nj_z: float, dx: float, dy: float) -> int:
@@ -421,10 +421,7 @@ class SteelCodeCheck(CAIAOServer):
               柱属底部所在楼层的上一层（柱底在 z_levels[i] 属 i+2 层），
               梁属梁面所在实际楼层（梁面在 z_levels[i] 属 i+1 层）
             """
-            if el_type == "column":
-                ref_z = min(ni_z, nj_z)  # 柱底标高
-            else:
-                ref_z = max(ni_z, nj_z)  # 梁面标高
+            ref_z = min(ni_z, nj_z) if el_type == "column" else max(ni_z, nj_z)
 
             if ref_z < 0.01:
                 return 1
@@ -458,12 +455,12 @@ class SteelCodeCheck(CAIAOServer):
                     for k in force_keys:
                         forces_by_case[lc_name][eid][k] += fvals.get(k, 0.0)
 
-        # GB50017 荷载组合（简化）:
-        # Combo1: 1.3*D + 1.5*L
-        # Combo2: 1.3*D + 1.5*W
-        # Combo3: 1.3*D + 1.5*L + 0.9*W
-        # Combo4: 1.3*D + 1.3*S  (地震简化)
-        # Combo5: 1.0*D + 1.5*W  (风吸力)
+        # GB50017 荷载组合（简化）:  # noqa: ERA001
+        # Combo1: 1.3*D + 1.5*L      # noqa: ERA001
+        # Combo2: 1.3*D + 1.5*W      # noqa: ERA001
+        # Combo3: 1.3*D + 1.5*L + 0.9*W  # noqa: ERA001
+        # Combo4: 1.3*D + 1.3*S      # noqa: ERA001
+        # Combo5: 1.0*D + 1.5*W      # noqa: ERA001
 
         def get_case_forces(case_name: str, elem_id: str) -> dict[str, float]:
             return forces_by_case.get(case_name, {}).get(elem_id, dict.fromkeys(force_keys, 0.0))
@@ -493,7 +490,7 @@ class SteelCodeCheck(CAIAOServer):
             env = dict.fromkeys(force_keys, 0.0)
             env_source = dict.fromkeys(force_keys, "-")
             combo_forces = []
-            for (cname, _), combo in zip(combo_formulas, combos):
+            for (cname, _), combo in zip(combo_formulas, combos, strict=True):
                 combo_forces.append({"name": cname, "forces": dict(combo)})
                 for k in force_keys:
                     if abs(combo[k]) > abs(env[k]):
