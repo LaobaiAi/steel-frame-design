@@ -12,8 +12,8 @@ v2.0 变化:
     - CLI 自身不含任何流程逻辑，仅解析参数并委托给 Hub
 """
 
-import sys
 import os
+import sys
 
 # 确保项目根目录在 sys.path 中
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -23,8 +23,8 @@ from servers.cli_orchestrator import CliOrchestrator
 
 try:
     from rich.console import Console
-    from rich.table import Table
     from rich.panel import Panel
+    from rich.table import Table
     RICH = True
 except ImportError:
     RICH = False
@@ -129,21 +129,29 @@ def main():
     i = 1
     while i < len(args):
         if args[i] in ("--mode", "-m") and i + 1 < len(args):
-            mode = args[i + 1]; i += 2
+            mode = args[i + 1]
+            i += 2
         elif args[i] in ("--input", "-i") and i + 1 < len(args):
-            input_file = args[i + 1]; i += 2
+            input_file = args[i + 1]
+            i += 2
         elif args[i] in ("--output-dir", "-o") and i + 1 < len(args):
-            output_dir = args[i + 1]; i += 2
+            output_dir = args[i + 1]
+            i += 2
         elif args[i] in ("--quick", "-q"):
-            quick = True; i += 1
+            quick = True
+            i += 1
         elif args[i] in ("--prompt", "-p") and i + 1 < len(args):
-            prompt = args[i + 1]; i += 2
+            prompt = args[i + 1]
+            i += 2
         elif args[i] == "--api-key" and i + 1 < len(args):
-            api_key = args[i + 1]; i += 2
+            api_key = args[i + 1]
+            i += 2
         elif args[i] == "--model" and i + 1 < len(args):
-            model = args[i + 1]; i += 2
+            model = args[i + 1]
+            i += 2
         elif args[i] == "--base-url" and i + 1 < len(args):
-            base_url = args[i + 1]; i += 2
+            base_url = args[i + 1]
+            i += 2
         else:
             i += 1
 
@@ -189,7 +197,7 @@ def main():
 
     # ── 执行 ─────────────────────────────────────────────────
     if mode == "engineering":
-        print_step(f"启动工程模式...")
+        print_step("启动工程模式...")
     elif mode == "llm-param":
         print_step(f"启动 LLM 参数提取模式 (model={model})...")
     elif mode == "llm-agent":
@@ -241,7 +249,7 @@ def main():
             print(f"最大应力比: {s['max_stress_ratio']:.4f}")
             print(f"最大挠度比: {s['max_deflection_ratio']:.4f}")
 
-        print(f"\n输出文件:")
+        print("\n输出文件:")
         for name, path in pipeline.get("output_files", {}).items():
             print(f"  {name}: {path}")
         print(f"\n完成！报告: {pipeline.get('report_path', '')}")
@@ -260,7 +268,7 @@ def main():
                 else:
                     print(f"  [{s.get('tool')}] {summary}")
             elif s.get("type") == "final_response":
-                print(f"  [Agent] 最终回复")
+                print("  [Agent] 最终回复")
 
 
 if __name__ == "__main__":

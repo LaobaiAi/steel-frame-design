@@ -21,9 +21,7 @@ import json
 import os
 import subprocess
 import sys
-import time
 from typing import Any
-
 
 # 确保 servers 在 sys.path 中
 _SERVERS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "servers")
@@ -77,7 +75,7 @@ class SubprocessManager:
         """
         if not self.is_running:
             if self.lazy:
-                tools = self.start()
+                self.start()
                 if not self.is_running:
                     return {"error": f"Subprocess '{self.name}' failed to start"}
             else:
@@ -194,7 +192,7 @@ class Hub:
 
             try:
                 module = importlib.import_module(f"servers.{module_name}")
-                for name, obj in inspect.getmembers(module, inspect.isclass):
+                for _name, obj in inspect.getmembers(module, inspect.isclass):
                     if not issubclass(obj, CAIAOServer) or obj is CAIAOServer:
                         continue
                     # 跳过标记为子进程的 Server（由 register_subprocess 管理）
