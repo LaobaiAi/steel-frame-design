@@ -24,20 +24,20 @@ export default function ReportPreview() {
   const [generatingReport, setGeneratingReport] = useState(false);
 
   const check = (codeCheckResults ?? {}) as Record<string, unknown>;
-  const summary = check?.summary ?? {};
+  const summary = (check?.summary ?? {}) as Record<string, unknown>;
   const elements = (check?.elements ?? []) as Array<Record<string, unknown>>;
   const analysis = (analysisResults ?? {}) as Record<string, unknown>;
   const params = (engineeringParams ?? {}) as Record<string, unknown>;
 
   // ── 统一从 elements 计算 pass/fail，与 ResultsPanel 口径一致 ──
-  const totalElements = elements.length || summary.total_elements || 0;
+  const totalElements = elements.length || (summary.total_elements as number) || 0;
   const failedElements = useMemo(() => elements.filter((el) => !el.pass), [elements]);
   const failed = failedElements.length;
   const passed = totalElements - failed;
-  const maxStress = summary.max_stress_ratio ?? '-';
-  const maxDeflection = summary.max_deflection_ratio ?? '-';
-  const maxDispRaw = analysis?.max_displacement ?? analysis?.summary?.max_displacement;
-  const maxDisp = maxDispRaw != null ? maxDispRaw * 1000 : '-';
+  const maxStress: number | string = (summary.max_stress_ratio as number | undefined) ?? '-';
+  const maxDeflection: number | string = (summary.max_deflection_ratio as number | undefined) ?? '-';
+  const maxDispRaw = (analysis?.max_displacement ?? (analysis?.summary as Record<string, unknown>)?.max_displacement) as number | undefined;
+  const maxDisp: number | string = maxDispRaw != null ? maxDispRaw * 1000 : '-';
 
   const passRate = totalElements > 0 ? ((passed / totalElements) * 100).toFixed(1) : '0';
 
@@ -46,7 +46,7 @@ export default function ReportPreview() {
     const gridX = (params.grid_x ?? []) as number[];
     const gridY = (params.grid_y ?? []) as number[];
     const heights = (params.story_heights ?? []) as number[];
-    const nStories = params.num_stories ?? 0;
+    const nStories = (params.num_stories as number) ?? 0;
     const colSec = (params.column_section ?? 'HW350x350x12x19') as string;
     const beamSec = (params.beam_section ?? 'HM340x250x9x14') as string;
 
@@ -173,14 +173,14 @@ export default function ReportPreview() {
         lines.push('【不合格构件清单】');
         lines.push(sub);
         failedElements.forEach((el) => {
-          lines.push(`  构件 ID: ${el.id ?? '-'}  |  楼层: ${el.story ?? '-'}F  |  类型: ${el.type || el.element_type || '-'}`);
-          lines.push(`  截面: ${el.section || '-'}  |  节点: ${el.node_i ?? '-'} — ${el.node_j ?? '-'}`);
+          lines.push(`  构件 ID: ${String(el.id ?? '-')}  |  楼层: ${String(el.story ?? '-')}F  |  类型: ${String(el.type || el.element_type || '-')}`);
+          lines.push(`  截面: ${String(el.section || '-')}  |  节点: ${String(el.node_i ?? '-')} — ${String(el.node_j ?? '-')}`);
           if (el.length_m != null) lines.push(`  长度: ${el.length_m} m`);
-          lines.push(`  应力比:       ${(el.stress_ratio ?? 0).toFixed(3)}   ${(el.stress_ratio ?? 0) <= 1 ? '✓' : '✗ 超限'}`);
-          lines.push(`  稳定比:       ${(el.stability_ratio ?? 0).toFixed(3)}   ${(el.stability_ratio ?? 0) <= 1 ? '✓' : '✗ 超限'}`);
-          lines.push(`  挠度比:       ${(el.deflection_ratio ?? 0).toFixed(3)}   ${(el.deflection_ratio ?? 0) <= 1 ? '✓' : '✗ 超限'}`);
+          lines.push(`  应力比:       ${Number(el.stress_ratio ?? 0).toFixed(3)}   ${Number(el.stress_ratio ?? 0) <= 1 ? '✓' : '✗ 超限'}`);
+          lines.push(`  稳定比:       ${Number(el.stability_ratio ?? 0).toFixed(3)}   ${Number(el.stability_ratio ?? 0) <= 1 ? '✓' : '✗ 超限'}`);
+          lines.push(`  挠度比:       ${Number(el.deflection_ratio ?? 0).toFixed(3)}   ${Number(el.deflection_ratio ?? 0) <= 1 ? '✓' : '✗ 超限'}`);
           if (el.slenderness_ratio != null)
-            lines.push(`  长细比:       ${(el.slenderness_ratio ?? 0).toFixed(1)}   ${(el.slenderness_ratio ?? 0) <= 150 ? '✓' : '✗ 超限'}`);
+            lines.push(`  长细比:       ${Number(el.slenderness_ratio ?? 0).toFixed(1)}   ${Number(el.slenderness_ratio ?? 0) <= 150 ? '✓' : '✗ 超限'}`);
           const msgs = (el.messages ?? []) as string[];
           if (msgs.length) msgs.forEach((m: string) => lines.push(`  > ${m}`));
           lines.push('');
@@ -293,11 +293,11 @@ export default function ReportPreview() {
               <div className="glass rounded-lg p-4 space-y-2">
                 <h4 className="text-sm font-medium text-gray-200 mb-2">项目信息</h4>
                 <div className="grid grid-cols-2 gap-2">
-                  <div className="flex justify-between"><span className="text-gray-500">项目名称</span><span className="text-white">{params.name || '钢框架'}</span></div>
-                  <div className="flex justify-between"><span className="text-gray-500">材料</span><span className="text-white">{params.material || 'Q355'}</span></div>
-                  <div className="flex justify-between"><span className="text-gray-500">柱截面</span><span className="text-white font-mono text-[11px]">{params.column_section || '-'}</span></div>
-                  <div className="flex justify-between"><span className="text-gray-500">梁截面</span><span className="text-white font-mono text-[11px]">{params.beam_section || '-'}</span></div>
-                  <div className="flex justify-between"><span className="text-gray-500">层数</span><span className="text-white">{params.num_stories || '-'}</span></div>
+                  <div className="flex justify-between"><span className="text-gray-500">项目名称</span><span className="text-white">{String(params.name || '钢框架')}</span></div>
+                  <div className="flex justify-between"><span className="text-gray-500">材料</span><span className="text-white">{String(params.material || 'Q355')}</span></div>
+                  <div className="flex justify-between"><span className="text-gray-500">柱截面</span><span className="text-white font-mono text-[11px]">{String(params.column_section || '-')}</span></div>
+                  <div className="flex justify-between"><span className="text-gray-500">梁截面</span><span className="text-white font-mono text-[11px]">{String(params.beam_section || '-')}</span></div>
+                  <div className="flex justify-between"><span className="text-gray-500">层数</span><span className="text-white">{String(params.num_stories || '-')}</span></div>
                   <div className="flex justify-between"><span className="text-gray-500">设计规范</span><span className="text-white">GB 50017-2017</span></div>
                 </div>
               </div>
@@ -367,23 +367,24 @@ export default function ReportPreview() {
                           const stabilityOk = Number(el.stability_ratio ?? 0) <= 1;
                           const deflectionOk = Number(el.deflection_ratio ?? 0) <= 1;
                           const allOk = stressOk && stabilityOk && deflectionOk;
-                          const isSelected = selectedElements.includes(el.id as number ?? i + 1);
+                          const elId = (el.id as number) ?? i + 1;
+                          const isSelected = selectedElements.includes(elId);
                           return (
                             <tr
-                              key={el.id ?? i}
-                              onClick={() => setSelectedElements(isSelected ? [] : [el.id ?? i + 1])}
+                              key={elId}
+                              onClick={() => setSelectedElements(isSelected ? [] : [elId])}
                               className={`border-b border-white/[0.02] cursor-pointer transition-all ${
                                 isSelected
                                   ? 'bg-cyan/20 hover:bg-cyan/25'
                                   : 'hover:bg-white/[0.03]'
                               }`}
                             >
-                              <td className="py-1.5 pr-2 text-white font-mono">{el.id ?? i + 1}</td>
-                              <td className="py-1.5 pr-2 text-gray-400 font-mono">{el.story ?? '-'}</td>
-                              <td className="py-1.5 pr-2 text-gray-400">{el.type || el.element_type || '-'}</td>
-                              <td className={`py-1.5 pr-2 text-right font-mono ${stressOk ? 'text-green-400' : 'text-red-400'}`}>{(el.stress_ratio ?? 0).toFixed(3)}</td>
-                              <td className={`py-1.5 pr-2 text-right font-mono ${stabilityOk ? 'text-green-400' : 'text-red-400'}`}>{(el.stability_ratio ?? 0).toFixed(3)}</td>
-                              <td className={`py-1.5 pr-2 text-right font-mono ${deflectionOk ? 'text-green-400' : 'text-red-400'}`}>{(el.deflection_ratio ?? 0).toFixed(3)}</td>
+                              <td className="py-1.5 pr-2 text-white font-mono">{elId}</td>
+                              <td className="py-1.5 pr-2 text-gray-400 font-mono">{String(el.story ?? '-')}</td>
+                              <td className="py-1.5 pr-2 text-gray-400">{String(el.type || el.element_type || '-')}</td>
+                              <td className={`py-1.5 pr-2 text-right font-mono ${stressOk ? 'text-green-400' : 'text-red-400'}`}>{Number(el.stress_ratio ?? 0).toFixed(3)}</td>
+                              <td className={`py-1.5 pr-2 text-right font-mono ${stabilityOk ? 'text-green-400' : 'text-red-400'}`}>{Number(el.stability_ratio ?? 0).toFixed(3)}</td>
+                              <td className={`py-1.5 pr-2 text-right font-mono ${deflectionOk ? 'text-green-400' : 'text-red-400'}`}>{Number(el.deflection_ratio ?? 0).toFixed(3)}</td>
                               <td className="py-1.5 text-center">
                                 <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-medium ${allOk ? 'bg-green-400/10 text-green-400' : 'bg-red-400/10 text-red-400'}`}>
                                   {allOk ? '✓' : '✗'}
@@ -408,16 +409,17 @@ export default function ReportPreview() {
                   <div className="space-y-1.5">
                     {failedElements.map((el) => {
                       const fails: string[] = [];
-                      if (Number(el.stress_ratio ?? 0) > 1) fails.push(`应力比 ${Number(el.stress_ratio).toFixed(3)}`);
-                      if (Number(el.stability_ratio ?? 0) > 1) fails.push(`稳定比 ${Number(el.stability_ratio).toFixed(3)}`);
-                      if (Number(el.deflection_ratio ?? 0) > 1) fails.push(`挠度比 ${Number(el.deflection_ratio).toFixed(3)}`);
-                      if (Number(el.slenderness_ratio ?? 0) > 150) fails.push(`长细比 ${Number(el.slenderness_ratio).toFixed(1)}`);
+                      if (Number(el.stress_ratio ?? 0) > 1) fails.push(`应力比 ${Number(el.stress_ratio ?? 0).toFixed(3)}`);
+                      if (Number(el.stability_ratio ?? 0) > 1) fails.push(`稳定比 ${Number(el.stability_ratio ?? 0).toFixed(3)}`);
+                      if (Number(el.deflection_ratio ?? 0) > 1) fails.push(`挠度比 ${Number(el.deflection_ratio ?? 0).toFixed(3)}`);
+                      if (Number(el.slenderness_ratio ?? 0) > 150) fails.push(`长细比 ${Number(el.slenderness_ratio ?? 0).toFixed(1)}`);
+                      const felId = (el.id as number) ?? 0;
                       return (
-                        <div key={el.id} className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-red-400/5 hover:bg-red-400/10 transition-colors cursor-pointer"
-                          onClick={() => setSelectedElements([el.id])}>
-                          <span className="text-[11px] font-mono text-gray-400 w-8">{el.id}</span>
-                          <span className="text-[11px] text-gray-300 w-10">{el.story}F</span>
-                          <span className="text-[11px] text-gray-400 w-14">{el.type || '-'}</span>
+                        <div key={felId} className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-red-400/5 hover:bg-red-400/10 transition-colors cursor-pointer"
+                          onClick={() => setSelectedElements([felId])}>
+                          <span className="text-[11px] font-mono text-gray-400 w-8">{felId}</span>
+                          <span className="text-[11px] text-gray-300 w-10">{String(el.story ?? '-')}F</span>
+                          <span className="text-[11px] text-gray-400 w-14">{String(el.type || '-')}</span>
                           <span className="text-[11px] text-gray-500 flex-1">{fails.join('; ')}</span>
                           <X size={10} className="text-red-400/60" />
                         </div>
@@ -440,11 +442,11 @@ export default function ReportPreview() {
               <div className="glass rounded-lg p-4 space-y-2">
                 <h4 className="text-sm font-medium text-gray-200 mb-2">项目信息</h4>
                 <div className="grid grid-cols-2 gap-2">
-                  <div className="flex justify-between"><span className="text-gray-500">项目名称</span><span className="text-white">{params.name || '钢框架'}</span></div>
-                  <div className="flex justify-between"><span className="text-gray-500">材料</span><span className="text-white">{params.material || 'Q355'}</span></div>
-                  <div className="flex justify-between"><span className="text-gray-500">柱截面</span><span className="text-white font-mono text-[11px]">{params.column_section || '-'}</span></div>
-                  <div className="flex justify-between"><span className="text-gray-500">梁截面</span><span className="text-white font-mono text-[11px]">{params.beam_section || '-'}</span></div>
-                  <div className="flex justify-between"><span className="text-gray-500">层数</span><span className="text-white">{params.num_stories || '-'}</span></div>
+                  <div className="flex justify-between"><span className="text-gray-500">项目名称</span><span className="text-white">{String(params.name || '钢框架')}</span></div>
+                  <div className="flex justify-between"><span className="text-gray-500">材料</span><span className="text-white">{String(params.material || 'Q355')}</span></div>
+                  <div className="flex justify-between"><span className="text-gray-500">柱截面</span><span className="text-white font-mono text-[11px]">{String(params.column_section || '-')}</span></div>
+                  <div className="flex justify-between"><span className="text-gray-500">梁截面</span><span className="text-white font-mono text-[11px]">{String(params.beam_section || '-')}</span></div>
+                  <div className="flex justify-between"><span className="text-gray-500">层数</span><span className="text-white">{String(params.num_stories || '-')}</span></div>
                   <div className="flex justify-between"><span className="text-gray-500">设计规范</span><span className="text-white">GB 50017-2017</span></div>
                 </div>
               </div>
@@ -507,7 +509,7 @@ export default function ReportPreview() {
                 <div className="text-[10px] text-gray-500">总构件数</div>
               </div>
               <div className="text-center p-2.5 rounded-lg bg-white/[0.03]">
-                <div className="text-lg font-bold text-cyan-400">{params.material || 'Q355'}</div>
+                <div className="text-lg font-bold text-cyan-400">{String(params.material || 'Q355')}</div>
                 <div className="text-[10px] text-gray-500">材料等级</div>
               </div>
             </div>

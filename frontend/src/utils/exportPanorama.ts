@@ -573,8 +573,8 @@ export async function exportPanoramaFromStore(): Promise<void> {
   const analysisResults = state.analysisResults as Record<string, unknown> | null;
   const checkResults = state.codeCheckResults as Record<string, unknown> | null;
 
-  const totalStories = params?.num_stories ?? 4;
-  const heights: number[] = params?.story_heights ?? [4.5, 3.6, 3.6, 3.6];
+  const totalStories = (params?.num_stories as number) ?? 4;
+  const heights: number[] = (params?.story_heights as number[]) ?? [4.5, 3.6, 3.6, 3.6];
 
   // Compute check stats
   let totalElements = 0;

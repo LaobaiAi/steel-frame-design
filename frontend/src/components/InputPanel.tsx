@@ -120,14 +120,14 @@ function runPipelineBackground(params: RunPipelineParams) {
       store.setPipelineSteps([
         { step: '模型生成', nodes: ((result.model as Record<string, unknown>)?.nodes as Array<unknown>)?.length, elements: ((result.model as Record<string, unknown>)?.elements as Array<unknown>)?.length },
         { step: '荷载施加' },
-        { step: '有限元分析', max_disp: ((result.analysis_result as Record<string, unknown>)?.summary as Record<string, unknown>)?.max_displacement },
-        { step: '规范校核', passed: ((result.code_check as Record<string, unknown>)?.summary as Record<string, unknown>)?.passed, failed: ((result.code_check as Record<string, unknown>)?.summary as Record<string, unknown>)?.failed },
+        { step: '有限元分析', max_disp: Number(((result.analysis_result as Record<string, unknown>)?.summary as Record<string, unknown>)?.max_displacement) || undefined },
+        { step: '规范校核', passed: Number(((result.code_check as Record<string, unknown>)?.summary as Record<string, unknown>)?.passed) || undefined, failed: Number(((result.code_check as Record<string, unknown>)?.summary as Record<string, unknown>)?.failed) || undefined },
         { step: '报告生成', path: result.report_url },
       ]);
       store.setPipelineActiveIndex(4);
       store.setPipelineProgress(100);
     } else {
-      store.setError(result.message || '流水线运行失败');
+      store.setError((result as Record<string, unknown>).message as string || '流水线运行失败');
     }
   }).catch(err => {
     store.setIsRunning(false);
@@ -327,12 +327,12 @@ function EngineeringForm() {
     try {
       const res = await api.projectLoad(filename);
       const data = res.data as Record<string, unknown>;
-      const input = data?.input || {};
-      const geo = input.geometry || {};
-      const sec = input.sections || {};
-      const loads = input.loads || {};
-      const output = data?.output || {};
-      const outSummary = output.summary || {};
+      const input = (data?.input || {}) as Record<string, unknown>;
+      const geo = (input.geometry || {}) as Record<string, unknown>;
+      const sec = (input.sections || {}) as Record<string, unknown>;
+      const loads = (input.loads || {}) as Record<string, unknown>;
+      const output = (data?.output || {}) as Record<string, unknown>;
+      const outSummary = (output.summary || {}) as Record<string, unknown>;
 
       setForm({
         grid_x: (geo.grid_x || [6, 6, 6]).join(','),
@@ -346,7 +346,7 @@ function EngineeringForm() {
         live_load: String(loads.live_load ?? 3.0),
         wind_pressure: String(loads.wind_pressure ?? 0.45),
         seismic_intensity: String(loads.seismic_intensity ?? 0.08),
-        name: data?.metadata?.project_name || '',
+        name: ((data?.metadata as Record<string, unknown>)?.project_name as string) || '',
       });
       setActivePreset(null);
       setValidationErrors({});
@@ -1028,7 +1028,7 @@ function LLMChat() {
           text += `| 材料 | ${p.material || 'Q355'} |\n`;
           text += `\n✅ 参数提取完成！点击下方按钮开始建模。`;
         } else {
-          throw new Error((result as Record<string, unknown>).message as string || '后端返回错误');
+          throw new Error((result as unknown as Record<string, unknown>).message as string || '后端返回错误');
         }
       } else {
         const result = await api.llmAgent({
@@ -1054,7 +1054,7 @@ function LLMChat() {
           }
           text += `\n### 🎯 最终结果\n${result.final_response}`;
         } else {
-          throw new Error((result as Record<string, unknown>).message as string || '后端返回错误');
+          throw new Error((result as unknown as Record<string, unknown>).message as string || '后端返回错误');
         }
       }
 

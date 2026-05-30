@@ -166,10 +166,10 @@ function exportCalcDetailTxt() {
 
   lines.push('【分析结果】');
   if (analysis) {
-    const maxDisp = analysis.summary?.max_displacement;
-    const lc = analysis.load_case || '-';
+    const maxDisp = (analysis?.summary as Record<string, unknown>)?.max_displacement;
+    const lc = analysis?.load_case || '-';
     if (maxDisp !== undefined) lines.push(pad(`最大位移: ${maxDisp} mm (工况: ${lc})`));
-    lines.push(pad(`求解器: ${analysis.engine || 'OpenSees'}`));
+    lines.push(pad(`求解器: ${analysis?.engine || 'OpenSees'}`));
   } else {
     lines.push(pad('暂无分析数据'));
   }
@@ -177,7 +177,7 @@ function exportCalcDetailTxt() {
 
   lines.push('【规范校核】');
   if (check) {
-    const s = check.summary || {};
+    const s = (check?.summary ?? {}) as Record<string, unknown>;
     const elements: Array<Record<string, unknown>> = (check.elements as Array<Record<string, unknown>>) || [];
     // 与 ResultsPanel 一致的统计口径：按应力比阈值分组
     const safeLimit = 0.8, criticalLimit = 1.0;
@@ -254,13 +254,13 @@ function ContextPanel() {
       case 'analysis':
         return (
           <div className="space-y-1.5 text-[11px]">
-            <div className="flex justify-between"><span className="text-gray-400">构建编号</span><span className="text-white font-mono text-[10px] truncate max-w-[140px]" title={params?.name || '未命名'}>{params?.name || '未命名'}</span></div>
+            <div className="flex justify-between"><span className="text-gray-400">构建编号</span><span className="text-white font-mono text-[10px] truncate max-w-[140px]" title={String(params?.name || '未命名')}>{String(params?.name || '未命名')}</span></div>
             <div className="flex justify-between items-center">
               <span className="text-gray-400">层数</span>
               <span className="text-white font-mono">{nz}</span>
             </div>
             <div className="flex justify-between"><span className="text-gray-400">总高</span><span className="text-white font-mono">{totalHeight.toFixed(1)}m</span></div>
-            <div className="flex justify-between"><span className="text-gray-400">材料</span><span className="text-white font-mono">{params?.material || 'Q355'}</span></div>
+            <div className="flex justify-between"><span className="text-gray-400">材料</span><span className="text-white font-mono">{String(params?.material || 'Q355')}</span></div>
             {currentStep === 'analysis' && engine && (
               <div className="pt-1.5 mt-1.5 border-t border-white/5">
                 <div className="flex justify-between"><span className="text-gray-400">求解器</span><span className="text-green-400 font-mono text-[10px]">{engine}</span></div>
@@ -390,7 +390,7 @@ function LoadSummaryPanel({ embedded }: { embedded?: boolean }) {
                   autoFocus />
               ) : (
                 <span className="text-xs font-mono" style={{ color: l.color }}>
-                  {l.value} <span className="text-gray-600">{l.unit}</span>
+                  {String(l.value)} <span className="text-gray-600">{l.unit}</span>
                 </span>
               )}
             </div>
@@ -472,7 +472,7 @@ function StepInfo({ currentStep }: { currentStep: string }) {
             engine ? 'bg-cyan/10 text-cyan/90' : 'bg-gray-500/10 text-gray-500'
           }`}>
             <span className={`w-1.5 h-1.5 rounded-full ${engine ? 'bg-green-400' : 'bg-gray-500'}`} />
-            {engine || '等待求解器'}
+            {String(engine || '等待求解器')}
           </span>
         </>
       )}
@@ -587,7 +587,7 @@ export default function App() {
             const merged = { ...lastRun, ...current };
             state.setIsRunning(true);
             state.setLastRunParams(null); // 防止重复触发
-            api.runPipeline(merged as RunPipelineParams).then(result => {
+            api.runPipeline(merged as unknown as RunPipelineParams).then(result => {
               const s = useStore.getState();
               if (result.status === 'success') {
                 s.setThreeDData(result.three_d_data ?? null);
@@ -852,8 +852,8 @@ export default function App() {
                   const state = useStore.getState();
                   const params = (state.engineeringParams ?? {}) as Record<string, unknown>;
                   const check = (state.codeCheckResults ?? {}) as Record<string, unknown>;
-                  const summary = check?.summary ?? {};
-                  const elements = check?.elements ?? [];
+                  const summary = (check?.summary ?? {}) as Record<string, unknown>;
+                  const elements = (check?.elements ?? []) as Array<Record<string, unknown>>;
 
                   const project = {
                     metadata: {

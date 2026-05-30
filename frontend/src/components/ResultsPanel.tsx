@@ -222,7 +222,7 @@ export default function ResultsPanel() {
         const elType = String(el.type ?? '');
         const mapped: CodeCheckElement = {
           id: Number(el.id ?? 0),
-          type: elType === '柱' ? 'column' : elType === 'X向梁' || elType === 'Y向梁' ? 'beam' : (elType || 'beam'),
+          type: (elType === '柱' ? 'column' : elType === 'X向梁' || elType === 'Y向梁' ? 'beam' : 'beam') as 'column' | 'beam',
           section: String(el.section ?? ''),
           story: Number(el.story ?? 1),
           node_i: Number(el.node_i ?? 0),

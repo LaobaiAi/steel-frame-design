@@ -1,5 +1,6 @@
 import React, { useRef, useMemo, useEffect, useState, Suspense } from 'react';
-import { useFrame, useThree, ThreeEvent } from '@react-three/fiber';
+import { useFrame, useThree } from '@react-three/fiber';
+import type { ThreeEvent } from '@react-three/fiber';
 import { OrbitControls, Text, Billboard, Environment } from '@react-three/drei';
 import * as THREE from 'three';
 import { useStore } from '../store/useStore';
@@ -390,7 +391,7 @@ function FrameModel({ data, showColorMap, currentStep, buildPhase, animate = fal
 
   function renderEl(el: MockElement, ni: THREE.Vector3, nj: THREE.Vector3, isColumn: boolean, floorIdx: number) {
     const cmap = data.color_map?.[String(el.id)];
-    const raw = cmap ? Number((cmap as Record<string, unknown>)[colorMode]) || 0.5 : 0.5;
+    const raw = cmap ? Number((cmap as unknown as Record<string, unknown>)[colorMode]) || 0.5 : 0.5;
     const ratio = colorMode === 'slenderness_ratio' ? raw / 150 : raw;
     const isHighStress = ratio > 0.8;
     // 建模阶段：按楼层配色（视觉分层清晰）；其余阶段：应力比配色或构件类型默认色
@@ -555,7 +556,7 @@ function LoadArrows({ arrows }: { arrows: MockArrow[] }) {
               </Text>
             </Billboard>
             <Billboard position={origin.clone().add(dir.clone().multiplyScalar(-1.8))}>
-              <Text fontSize={0.38} color={color} anchorX="center" anchorY="middle" transparent opacity={0.7}>
+              <Text fontSize={0.38} color={color} anchorX="center" anchorY="middle" fillOpacity={0.7}>
                 {`${a.magnitude} ${typeUnits[a.type]}`}
               </Text>
             </Billboard>
@@ -613,7 +614,7 @@ function WindAnimation({ bbox }: { bbox: MockData['bounding_box'] }) {
   return (
     <points ref={ref}>
       <bufferGeometry>
-        <bufferAttribute attach="attributes-position" count={numParticles} array={initPos} itemSize={3} />
+        <bufferAttribute attach="attributes-position" args={[initPos, 3]} />
       </bufferGeometry>
       <pointsMaterial size={0.12} color="#66ddff" transparent opacity={0.5} sizeAttenuation depthWrite={false} />
     </points>
@@ -662,7 +663,7 @@ function SeismicAnimation({ bbox }: { bbox: MockData['bounding_box'] }) {
       <Text position={[0, 0, -1.2]} fontSize={0.55} color="#ff8844" anchorX="center" anchorY="middle" fontWeight={700}>
         地震源
       </Text>
-      <Text position={[0, 0, -1.9]} fontSize={0.28} color="#ff8844" anchorX="center" anchorY="middle" transparent opacity={0.5}>
+      <Text position={[0, 0, -1.9]} fontSize={0.28} color="#ff8844" anchorX="center" anchorY="middle" fillOpacity={0.5}>
         Epicenter
       </Text>
       {/* Expanding spherical shockwaves */}
@@ -844,7 +845,7 @@ function Lights({ shadows = true }: { shadows?: boolean }) {
 
 // ── View Controller: listens for preset view events ──────────
 
-function ViewController({ controlsRef, center, boundingBox }: { controlsRef: React.MutableRefObject<{ target: THREE.Vector3; update: () => void } | null>; center: [number, number, number]; boundingBox?: MockData['bounding_box'] }) {
+function ViewController({ controlsRef, center, boundingBox }: { controlsRef: React.MutableRefObject<any>; center: [number, number, number]; boundingBox?: MockData['bounding_box'] }) {
   const { camera } = useThree();
   const fov = (camera as THREE.PerspectiveCamera).fov;
   const dist = useMemo(() => {
@@ -923,7 +924,8 @@ export default function ThreeCanvas() {
     setAutoRotate,
   } = useStore();
   const [buildPhase, setBuildPhase] = useState(0);
-  const controlsRef = useRef<{ target: THREE.Vector3; update: () => void } | null>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- OrbitControls ref must match drei's expected type
+  const controlsRef = useRef<any>(null);
 
   // Build animation: 楼层渐进展示 + 自动旋转
   useEffect(() => {
