@@ -26,7 +26,7 @@ function generateMockResults(store: ReturnType<typeof useStore.getState>, params
   const failed = Math.max(1, Math.round(totalElements * 0.1));
   const passed = totalElements - failed;
 
-  const mockElements: any[] = [];
+  const mockElements: Array<Record<string, unknown>> = [];
   let eid = 0;
   // Columns — story k+1 (1-based), bottom at z_levels[k-1] (or 0 for k=0)
   for (let k = 0; k < nz; k++) {
@@ -118,10 +118,10 @@ function runPipelineBackground(params: RunPipelineParams) {
       store.setReportUrl(result.report_url ?? '');
 
       store.setPipelineSteps([
-        { step: '模型生成', nodes: (result.model as any)?.nodes?.length, elements: (result.model as any)?.elements?.length },
+        { step: '模型生成', nodes: ((result.model as Record<string, unknown>)?.nodes as Array<unknown>)?.length, elements: ((result.model as Record<string, unknown>)?.elements as Array<unknown>)?.length },
         { step: '荷载施加' },
-        { step: '有限元分析', max_disp: (result.analysis_result as any)?.summary?.max_displacement },
-        { step: '规范校核', passed: (result.code_check as any)?.summary?.passed, failed: (result.code_check as any)?.summary?.failed },
+        { step: '有限元分析', max_disp: ((result.analysis_result as Record<string, unknown>)?.summary as Record<string, unknown>)?.max_displacement },
+        { step: '规范校核', passed: ((result.code_check as Record<string, unknown>)?.summary as Record<string, unknown>)?.passed, failed: ((result.code_check as Record<string, unknown>)?.summary as Record<string, unknown>)?.failed },
         { step: '报告生成', path: result.report_url },
       ]);
       store.setPipelineActiveIndex(4);
@@ -326,7 +326,7 @@ function EngineeringForm() {
     setImportingProject(true);
     try {
       const res = await api.projectLoad(filename);
-      const data = res.data as Record<string, any>;
+      const data = res.data as Record<string, unknown>;
       const input = data?.input || {};
       const geo = input.geometry || {};
       const sec = input.sections || {};
@@ -427,11 +427,13 @@ function EngineeringForm() {
 
   // 持续检测后端连接，永不停止
   useEffect(() => {
+    /* eslint-disable react-hooks/set-state-in-effect -- intentional backend health check loop */
     checkBackend();
     const interval = setInterval(() => {
       checkBackend();
       setRetryCount(c => c + 1);
     }, 3000);
+    /* eslint-enable react-hooks/set-state-in-effect */
     retryTimerRef.current = interval;
     return () => clearInterval(interval);
   }, [checkBackend]);
@@ -1026,7 +1028,7 @@ function LLMChat() {
           text += `| 材料 | ${p.material || 'Q355'} |\n`;
           text += `\n✅ 参数提取完成！点击下方按钮开始建模。`;
         } else {
-          throw new Error((result as any).message || '后端返回错误');
+          throw new Error((result as Record<string, unknown>).message as string || '后端返回错误');
         }
       } else {
         const result = await api.llmAgent({
@@ -1052,7 +1054,7 @@ function LLMChat() {
           }
           text += `\n### 🎯 最终结果\n${result.final_response}`;
         } else {
-          throw new Error((result as any).message || '后端返回错误');
+          throw new Error((result as Record<string, unknown>).message as string || '后端返回错误');
         }
       }
 

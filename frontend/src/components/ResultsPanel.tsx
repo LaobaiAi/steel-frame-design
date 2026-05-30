@@ -216,23 +216,24 @@ export default function ResultsPanel() {
   // ── Elements ────────────────────────────────────────────────────
   const elements: CodeCheckElement[] = useMemo(() => {
     if (!codeCheckResults) return MOCK_ELEMENTS;
-    const data = codeCheckResults as any;
+    const data = codeCheckResults as Record<string, unknown>;
     if (data.elements && Array.isArray(data.elements) && data.elements.length > 0) {
-      return (data.elements as any[]).map((el: any) => {
+      return (data.elements as Array<Record<string, unknown>>).map((el) => {
+        const elType = String(el.type ?? '');
         const mapped: CodeCheckElement = {
-          id: el.id ?? 0,
-          type: el.type === '柱' ? 'column' : el.type === 'X向梁' || el.type === 'Y向梁' ? 'beam' : (el.type ?? 'beam'),
-          section: el.section ?? '',
-          story: el.story ?? 1,
-          node_i: el.node_i ?? 0,
-          node_j: el.node_j ?? 0,
-          stress_ratio: el.stress_ratio ?? 0,
-          stability_ratio: el.stability_ratio ?? 0,
-          deflection_ratio: el.deflection_ratio ?? 0,
-          slenderness_ratio: el.slenderness_ratio ?? 0,
-          pass: el.pass ?? true,
-          messages: el.messages ?? [],
-          calcProcesses: el.calc_processes ?? el.calcProcesses,
+          id: Number(el.id ?? 0),
+          type: elType === '柱' ? 'column' : elType === 'X向梁' || elType === 'Y向梁' ? 'beam' : (elType || 'beam'),
+          section: String(el.section ?? ''),
+          story: Number(el.story ?? 1),
+          node_i: Number(el.node_i ?? 0),
+          node_j: Number(el.node_j ?? 0),
+          stress_ratio: Number(el.stress_ratio ?? 0),
+          stability_ratio: Number(el.stability_ratio ?? 0),
+          deflection_ratio: Number(el.deflection_ratio ?? 0),
+          slenderness_ratio: Number(el.slenderness_ratio ?? 0),
+          pass: el.pass !== undefined ? Boolean(el.pass) : true,
+          messages: (el.messages ?? []) as string[],
+          calcProcesses: (el.calc_processes ?? el.calcProcesses) as CodeCheckElement['calcProcesses'],
         };
         // Auto-generate calc processes if backend didn't provide them
         if (!mapped.calcProcesses) {
@@ -283,6 +284,7 @@ export default function ResultsPanel() {
   // ── Selection ──────────────────────────────────────────────────
   useEffect(() => {
     if (selectedElements.length === 1) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional scroll-to-selected
       setSelectedRow(selectedElements[0]);
       const row = rowRefs.current.get(selectedElements[0]);
       row?.scrollIntoView({ block: 'center', behavior: 'smooth' });
@@ -431,7 +433,11 @@ export default function ResultsPanel() {
                       onClick={() => {
                         setExpandedCalc(prev => {
                           const next = new Set(prev);
-                          next.has(cp.title) ? next.delete(cp.title) : next.add(cp.title);
+                          if (next.has(cp.title)) {
+                            next.delete(cp.title);
+                          } else {
+                            next.add(cp.title);
+                          }
                           return next;
                         });
                       }}

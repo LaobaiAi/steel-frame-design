@@ -68,7 +68,7 @@ function PixelBg() {
         for (let c = 0; c < cols; c++) {
           const p = pts[r * cols + c];
           if (!p) continue;
-          c === 0 ? ctx!.moveTo(p.x, p.y) : ctx!.lineTo(p.x, p.y);
+          if (c === 0) ctx!.moveTo(p.x, p.y); else ctx!.lineTo(p.x, p.y);
         }
         ctx!.stroke();
       }
@@ -77,7 +77,7 @@ function PixelBg() {
         for (let r = 0; r < rows; r++) {
           const p = pts[r * cols + c];
           if (!p) continue;
-          r === 0 ? ctx!.moveTo(p.x, p.y) : ctx!.lineTo(p.x, p.y);
+          if (r === 0) ctx!.moveTo(p.x, p.y); else ctx!.lineTo(p.x, p.y);
         }
         ctx!.stroke();
       }
@@ -169,7 +169,7 @@ function GridDistortion() {
         for (let c = 0; c < cols; c++) {
           const p = pts[r * cols + c];
           if (!p) continue;
-          c === 0 ? ctx!.moveTo(p.x, p.y) : ctx!.lineTo(p.x, p.y);
+          if (c === 0) ctx!.moveTo(p.x, p.y); else ctx!.lineTo(p.x, p.y);
         }
         ctx!.stroke();
       }
@@ -178,7 +178,7 @@ function GridDistortion() {
         for (let r = 0; r < rows; r++) {
           const p = pts[r * cols + c];
           if (!p) continue;
-          r === 0 ? ctx!.moveTo(p.x, p.y) : ctx!.lineTo(p.x, p.y);
+          if (r === 0) ctx!.moveTo(p.x, p.y); else ctx!.lineTo(p.x, p.y);
         }
         ctx!.stroke();
       }
