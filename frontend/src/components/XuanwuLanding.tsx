@@ -109,6 +109,7 @@ function Hero() {
   const { setStep } = useStore();
   const [mounted, setMounted] = useState(false);
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional mount animation
   useEffect(() => { setMounted(true); }, []);
 
   return (

@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, useCallback } from 'react';
 import { useStore } from '../store/useStore';
-import { GripHorizontal, X, PanelRightOpen } from 'lucide-react';
+import { X, PanelRightOpen } from 'lucide-react';
 
 interface DockPanelProps {
   id: string;
@@ -51,12 +51,17 @@ export default function DockPanel({
   const panelRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef({ startX: 0, startY: 0, elX: 0, elY: 0, dragging: false, wasDocked: false });
   const posRef = useRef(pos);
-  posRef.current = pos;
+  useLayoutEffect(() => {
+    posRef.current = pos;
+  });
   const myDockSideRef = useRef<'left' | 'right' | null>(null);
-  myDockSideRef.current = dockPanels.left.includes(id) ? 'left'
-    : dockPanels.right.includes(id) ? 'right' : null;
+  useLayoutEffect(() => {
+    myDockSideRef.current = dockPanels.left.includes(id) ? 'left'
+      : dockPanels.right.includes(id) ? 'right' : null;
+  });
 
-  const myDockSide = myDockSideRef.current;
+  const myDockSide = dockPanels.left.includes(id) ? 'left'
+      : dockPanels.right.includes(id) ? 'right' : null;
   const myIndex = myDockSide === 'left'
     ? dockPanels.left.indexOf(id)
     : myDockSide === 'right'

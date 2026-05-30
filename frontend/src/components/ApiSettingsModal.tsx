@@ -15,9 +15,11 @@ export default function ApiSettingsModal({ onClose }: { onClose: () => void }) {
   const [testStatus, setTestStatus] = useState<'idle' | 'testing' | 'success' | 'error'>('idle');
   const [testMsg, setTestMsg] = useState('');
 
+  // Auto-fill baseUrl/model from provider presets
   useEffect(() => {
     const presets = PROVIDER_PRESETS[form.provider];
     if (presets) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional preset auto-fill on provider change
       setForm(f => ({
         ...f,
         baseUrl: f.baseUrl || presets.baseUrl || '',
