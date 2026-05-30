@@ -127,7 +127,7 @@ function runPipelineBackground(params: RunPipelineParams) {
       store.setPipelineActiveIndex(4);
       store.setPipelineProgress(100);
     } else {
-      store.setError((result as Record<string, unknown>).message as string || '流水线运行失败');
+      store.setError((result as unknown as Record<string, unknown>).message as string || '流水线运行失败');
     }
   }).catch(err => {
     store.setIsRunning(false);
@@ -335,13 +335,13 @@ function EngineeringForm() {
       const outSummary = (output.summary || {}) as Record<string, unknown>;
 
       setForm({
-        grid_x: (geo.grid_x || [6, 6, 6]).join(','),
-        grid_y: (geo.grid_y || [6, 6, 6]).join(','),
+        grid_x: ((geo.grid_x as number[]) || [6, 6, 6]).join(','),
+        grid_y: ((geo.grid_y as number[]) || [6, 6, 6]).join(','),
         num_stories: String(geo.num_stories || 4),
-        story_heights: (geo.story_heights || [4.5, 3.6, 3.6, 3.6]).join(','),
-        column_section: sec.column || 'HW400x400x13x21',
-        beam_section: sec.beam || 'HM390x300x10x16',
-        material: sec.material || 'Q355',
+        story_heights: ((geo.story_heights as number[]) || [4.5, 3.6, 3.6, 3.6]).join(','),
+        column_section: (sec.column as string) || 'HW400x400x13x21',
+        beam_section: (sec.beam as string) || 'HM390x300x10x16',
+        material: (sec.material as string) || 'Q355',
         dead_load: String(loads.dead_load ?? 2.0),
         live_load: String(loads.live_load ?? 3.0),
         wind_pressure: String(loads.wind_pressure ?? 0.45),
@@ -353,16 +353,16 @@ function EngineeringForm() {
       setShowImportDropdown(false);
 
       // 加载已有输出数据到 store，避免重复计算
-      const elements = output.code_check_elements || [];
-      if (elements.length > 0 || outSummary.total_elements > 0) {
+      const elements = (output.code_check_elements || []) as Record<string, unknown>[];
+      if (elements.length > 0 || (outSummary.total_elements as number) > 0) {
         const store = useStore.getState();
         store.setCodeCheckResults({
           summary: {
-            total_elements: outSummary.total_elements ?? elements.length,
-            passed: outSummary.passed_count ?? 0,
-            failed: outSummary.failed_count ?? 0,
-            max_stress_ratio: outSummary.max_stress_ratio ?? 0,
-            max_deflection_ratio: outSummary.max_deflection_ratio ?? 0,
+            total_elements: (outSummary.total_elements as number) ?? elements.length,
+            passed: (outSummary.passed_count as number) ?? 0,
+            failed: (outSummary.failed_count as number) ?? 0,
+            max_stress_ratio: (outSummary.max_stress_ratio as number) ?? 0,
+            max_deflection_ratio: (outSummary.max_deflection_ratio as number) ?? 0,
           },
           elements,
         });
@@ -372,10 +372,10 @@ function EngineeringForm() {
           summary: { max_displacement: null },
         });
         store.setPipelineSteps([
-          { step: '模型生成', elements: outSummary.total_elements },
+          { step: '模型生成', elements: outSummary.total_elements as number },
           { step: '荷载施加' },
           { step: '有限元分析' },
-          { step: '规范校核', passed: outSummary.passed_count, failed: outSummary.failed_count },
+          { step: '规范校核', passed: outSummary.passed_count as number, failed: outSummary.failed_count as number },
           { step: '报告生成' },
         ]);
         store.setPipelineActiveIndex(4);
