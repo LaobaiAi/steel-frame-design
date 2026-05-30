@@ -8,20 +8,19 @@ line-length = 100
 
 [tool.ruff.lint]
 select = [
-    # pyflakes
+    # pyflakes (catches real bugs: unused vars, unused imports)
     "F",
-    # pycodestyle
+    # pycodestyle (catches real issues)
     "E", "W",
-    # isort
+    # isort (import ordering)
     "I",
-    # bugbear
+    # bugbear (bug-prone patterns)
     "B",
-    # flake8-comprehensions
-    "C4",
-    # flake8-simplify
-    "SIM",
-    # eradicate (dead code)
-    "ERA",
+    # flake8-comprehensions / flake8-simplify / eradicate
+    # 纯风格偏好，关闭以减少噪音
+    # "C4",
+    # "SIM",
+    # "ERA",
 ]
 ignore = [
     # 行太长 (交给 formatter)
