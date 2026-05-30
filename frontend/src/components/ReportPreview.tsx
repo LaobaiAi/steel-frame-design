@@ -23,15 +23,15 @@ export default function ReportPreview() {
   const [showQuantity, setShowQuantity] = useState(false);
   const [generatingReport, setGeneratingReport] = useState(false);
 
-  const check = (codeCheckResults ?? {}) as Record<string, any>;
+  const check = (codeCheckResults ?? {}) as Record<string, unknown>;
   const summary = check?.summary ?? {};
-  const elements = (check?.elements ?? []) as any[];
-  const analysis = (analysisResults ?? {}) as Record<string, any>;
-  const params = (engineeringParams ?? {}) as Record<string, any>;
+  const elements = (check?.elements ?? []) as Array<Record<string, unknown>>;
+  const analysis = (analysisResults ?? {}) as Record<string, unknown>;
+  const params = (engineeringParams ?? {}) as Record<string, unknown>;
 
   // ── 统一从 elements 计算 pass/fail，与 ResultsPanel 口径一致 ──
   const totalElements = elements.length || summary.total_elements || 0;
-  const failedElements = useMemo(() => elements.filter((el: any) => !el.pass), [elements]);
+  const failedElements = useMemo(() => elements.filter((el) => !el.pass), [elements]);
   const failed = failedElements.length;
   const passed = totalElements - failed;
   const maxStress = summary.max_stress_ratio ?? '-';
@@ -49,7 +49,6 @@ export default function ReportPreview() {
     const nStories = params.num_stories ?? 0;
     const colSec = (params.column_section ?? 'HW350x350x12x19') as string;
     const beamSec = (params.beam_section ?? 'HM340x250x9x14') as string;
-    const matDensity = (params.material ?? 'Q355') === 'Q235' ? 7850 : 7850;
 
     if (!gridX.length || !gridY.length || !nStories) {
       return { total: 0, details: [], bySection: [] };
@@ -69,12 +68,11 @@ export default function ReportPreview() {
     }
 
     // 梁统计
-    let beamTotalLen = 0;
     const beamXCount = gridX.length * nColY * nStories;
     const beamYCount = nColX * gridY.length * nStories;
     const beamXLen = gridX.reduce((a, b) => a + b, 0) * nColY * nStories;
     const beamYLen = gridY.reduce((a, b) => a + b, 0) * nColX * nStories;
-    beamTotalLen = beamXLen + beamYLen;
+    const beamTotalLen = beamXLen + beamYLen;
 
     const colW = (SECTION_WEIGHT[colSec] ?? 100) / 1000; // kg/m → t/m
     const beamW = (SECTION_WEIGHT[beamSec] ?? 80) / 1000;
@@ -174,7 +172,7 @@ export default function ReportPreview() {
       if (failedElements.length > 0) {
         lines.push('【不合格构件清单】');
         lines.push(sub);
-        failedElements.forEach((el: any) => {
+        failedElements.forEach((el) => {
           lines.push(`  构件 ID: ${el.id ?? '-'}  |  楼层: ${el.story ?? '-'}F  |  类型: ${el.type || el.element_type || '-'}`);
           lines.push(`  截面: ${el.section || '-'}  |  节点: ${el.node_i ?? '-'} — ${el.node_j ?? '-'}`);
           if (el.length_m != null) lines.push(`  长度: ${el.length_m} m`);
@@ -364,12 +362,12 @@ export default function ReportPreview() {
                         </tr>
                       </thead>
                       <tbody>
-                        {elements.map((el: any, i: number) => {
-                          const stressOk = (el.stress_ratio ?? 0) <= 1;
-                          const stabilityOk = (el.stability_ratio ?? 0) <= 1;
-                          const deflectionOk = (el.deflection_ratio ?? 0) <= 1;
+                        {elements.map((el, i: number) => {
+                          const stressOk = Number(el.stress_ratio ?? 0) <= 1;
+                          const stabilityOk = Number(el.stability_ratio ?? 0) <= 1;
+                          const deflectionOk = Number(el.deflection_ratio ?? 0) <= 1;
                           const allOk = stressOk && stabilityOk && deflectionOk;
-                          const isSelected = selectedElements.includes(el.id ?? i + 1);
+                          const isSelected = selectedElements.includes(el.id as number ?? i + 1);
                           return (
                             <tr
                               key={el.id ?? i}
@@ -408,12 +406,12 @@ export default function ReportPreview() {
                     未通过构件 ({failed})
                   </h4>
                   <div className="space-y-1.5">
-                    {failedElements.map((el: any) => {
+                    {failedElements.map((el) => {
                       const fails: string[] = [];
-                      if ((el.stress_ratio ?? 0) > 1) fails.push(`应力比 ${el.stress_ratio.toFixed(3)}`);
-                      if ((el.stability_ratio ?? 0) > 1) fails.push(`稳定比 ${el.stability_ratio.toFixed(3)}`);
-                      if ((el.deflection_ratio ?? 0) > 1) fails.push(`挠度比 ${el.deflection_ratio.toFixed(3)}`);
-                      if ((el.slenderness_ratio ?? 0) > 150) fails.push(`长细比 ${el.slenderness_ratio.toFixed(1)}`);
+                      if (Number(el.stress_ratio ?? 0) > 1) fails.push(`应力比 ${Number(el.stress_ratio).toFixed(3)}`);
+                      if (Number(el.stability_ratio ?? 0) > 1) fails.push(`稳定比 ${Number(el.stability_ratio).toFixed(3)}`);
+                      if (Number(el.deflection_ratio ?? 0) > 1) fails.push(`挠度比 ${Number(el.deflection_ratio).toFixed(3)}`);
+                      if (Number(el.slenderness_ratio ?? 0) > 150) fails.push(`长细比 ${Number(el.slenderness_ratio).toFixed(1)}`);
                       return (
                         <div key={el.id} className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-red-400/5 hover:bg-red-400/10 transition-colors cursor-pointer"
                           onClick={() => setSelectedElements([el.id])}>

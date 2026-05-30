@@ -133,9 +133,9 @@ function PanelMenu({ onExportPanorama, exporting }: { onExportPanorama: () => vo
 
 function exportCalcDetailTxt() {
   const state = useStore.getState();
-  const params = state.engineeringParams as Record<string, any>;
-  const analysis = state.analysisResults as Record<string, any> | null;
-  const check = state.codeCheckResults as Record<string, any> | null;
+  const params = state.engineeringParams as Record<string, unknown>;
+  const analysis = state.analysisResults as Record<string, unknown> | null;
+  const check = state.codeCheckResults as Record<string, unknown> | null;
 
   const lines: string[] = [];
   const pad = (s: string) => `  ${s}`;
@@ -178,20 +178,20 @@ function exportCalcDetailTxt() {
   lines.push('【规范校核】');
   if (check) {
     const s = check.summary || {};
-    const elements: any[] = check.elements || [];
+    const elements: Array<Record<string, unknown>> = (check.elements as Array<Record<string, unknown>>) || [];
     // 与 ResultsPanel 一致的统计口径：按应力比阈值分组
     const safeLimit = 0.8, criticalLimit = 1.0;
     // 取应力比、稳定比、挠度比、长细比的最大值作为综合判定
-    const maxRatio = (el: any) => Math.max(
-      el.stress_ratio ?? 0,
-      el.stability_ratio ?? 0,
-      el.deflection_ratio ?? 0,
-      (el.slenderness_ratio ?? 0) / 150,
+    const maxRatio = (el: Record<string, unknown>) => Math.max(
+      Number(el.stress_ratio ?? 0),
+      Number(el.stability_ratio ?? 0),
+      Number(el.deflection_ratio ?? 0),
+      Number(el.slenderness_ratio ?? 0) / 150,
     );
     const total = elements.length;
-    const safe = elements.filter((e: any) => maxRatio(e) <= safeLimit).length;
-    const warning = elements.filter((e: any) => maxRatio(e) > safeLimit && maxRatio(e) <= criticalLimit).length;
-    const critical = elements.filter((e: any) => maxRatio(e) > criticalLimit).length;
+    const safe = elements.filter((e) => maxRatio(e) <= safeLimit).length;
+    const warning = elements.filter((e) => maxRatio(e) > safeLimit && maxRatio(e) <= criticalLimit).length;
+    const critical = elements.filter((e) => maxRatio(e) > criticalLimit).length;
     lines.push(pad(`构件总数: ${total}`));
     lines.push(pad(`安全 (≤${safeLimit}): ${safe}`));
     lines.push(pad(`警告 (${safeLimit}~${criticalLimit}): ${warning}`));
@@ -203,7 +203,7 @@ function exportCalcDetailTxt() {
     if (elements.length > 0) {
       lines.push('');
       lines.push(pad('--- 构件校核明细 ---'));
-      elements.forEach((el: any) => {
+      elements.forEach((el) => {
         const maxR = maxRatio(el);
         let status: string, statusColor: string;
         if (maxR > criticalLimit) { status = '超限'; statusColor = '✗'; }
@@ -231,16 +231,14 @@ function exportCalcDetailTxt() {
 
 function ContextPanel() {
   const { currentStep, engineeringParams, analysisResults, colorMode, setColorMode } = useStore();
-  const params = engineeringParams as any;
+  const params = engineeringParams as Record<string, unknown> | null;
   const [collapsed, setCollapsed] = useState(false);
 
   if (!isPipelineStep(currentStep)) return null;
 
-  const nx = params?.grid_x?.length ?? 0;
-  const ny = params?.grid_y?.length ?? 0;
-  const nz = params?.num_stories ?? 0;
-  const totalHeight = params?.story_heights?.reduce((a: number, b: number) => a + b, 0) ?? 0;
-  const engine = (analysisResults as any)?.engine ?? null;
+  const nz = (params?.num_stories as number) ?? 0;
+  const totalHeight = (params?.story_heights as Array<number> | undefined)?.reduce((a: number, b: number) => a + b, 0) ?? 0;
+  const engine = (analysisResults as Record<string, unknown> | null)?.engine as string ?? null;
 
   const stepMeta: Record<string, { title: string; icon: React.ReactNode }> = {
     modeling: { title: '模型信息', icon: <Info size={14} /> },
@@ -338,7 +336,7 @@ function ContextPanel() {
 
 function LoadSummaryPanel({ embedded }: { embedded?: boolean }) {
   const { engineeringParams, setEngineeringParams } = useStore();
-  const p = engineeringParams as Record<string, any>;
+  const p = engineeringParams as Record<string, unknown> | null;
   const [editing, setEditing] = useState<string | null>(null);
   const [editValue, setEditValue] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
@@ -349,7 +347,7 @@ function LoadSummaryPanel({ embedded }: { embedded?: boolean }) {
 
   const commitEdit = (key: string) => {
     const num = parseFloat(editValue);
-    if (!isNaN(num)) {
+    if (!isNaN(num) && p) {
       setEngineeringParams({ ...p, [key]: num });
     }
     setEditing(null);
@@ -410,7 +408,7 @@ function LoadSummaryPanel({ embedded }: { embedded?: boolean }) {
 
 function AnalysisControls() {
   const { deformationScale, setDeformationScale, setShowDeformed, threeDData } = useStore();
-  const maxDispRaw = (threeDData as any)?.max_displacement;
+  const maxDispRaw = (threeDData as Record<string, unknown> | null)?.max_displacement as number | undefined;
   const maxDisp = maxDispRaw != null ? (maxDispRaw * 1000).toFixed(1) : '12.5';
   return (
     <div className="px-3 py-3">
@@ -451,7 +449,7 @@ function AnalysisControls() {
 // ── Step Info Banner ─────────────────────────────────────────────
 
 function StepInfo({ currentStep }: { currentStep: string }) {
-  const analysisResults = useStore(s => s.analysisResults) as Record<string, any> | null;
+  const analysisResults = useStore(s => s.analysisResults) as Record<string, unknown> | null;
   const engine = analysisResults?.engine || null;
 
   const info: Record<string, { title: string; desc: string }> = {
@@ -852,8 +850,8 @@ export default function App() {
                 <button onClick={async () => {
                   setSaving(true);
                   const state = useStore.getState();
-                  const params = (state.engineeringParams ?? {}) as Record<string, any>;
-                  const check = (state.codeCheckResults ?? {}) as Record<string, any>;
+                  const params = (state.engineeringParams ?? {}) as Record<string, unknown>;
+                  const check = (state.codeCheckResults ?? {}) as Record<string, unknown>;
                   const summary = check?.summary ?? {};
                   const elements = check?.elements ?? [];
 
@@ -930,7 +928,7 @@ export default function App() {
                     setShowFinishDialog(false);
                     setSaveMessage(null);
                     state.setStep('input');
-                  } catch (e: any) {
+                  } catch {
                     setSaving(false);
                     setSaveMessage({ type: 'error', text: '数据保存失败，请重试' });
                   }
