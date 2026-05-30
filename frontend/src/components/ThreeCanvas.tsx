@@ -1,5 +1,5 @@
 import React, { useRef, useMemo, useEffect, useState, Suspense } from 'react';
-import { useFrame, useThree } from '@react-three/fiber';
+import { useFrame, useThree, ThreeEvent } from '@react-three/fiber';
 import { OrbitControls, Text, Billboard, Environment } from '@react-three/drei';
 import * as THREE from 'three';
 import { useStore } from '../store/useStore';
@@ -99,10 +99,8 @@ function generateModel(params: EngParams): MockData {
       supports.push({ node_id: idx(i, j, 0), dof: [true, true, true, true, true, true] });
 
   // ── Representative load arrows — one clean arrow per type ──
-  const deadVal = (params as any).dead_load ?? 2.0;
-  const liveVal = (params as any).live_load ?? 3.0;
-  const windVal = (params as any).wind_pressure ?? 0.45;
-  const seismicVal = (params as any).seismic_intensity ?? 0.08;
+  const deadVal = (params as Record<string, unknown>).dead_load as number ?? 2.0;
+  const liveVal = (params as Record<string, unknown>).live_load as number ?? 3.0;
   const load_arrows: MockArrow[] = [];
   const centerX = (posX[0] + posX[nx]) / 2;
   const centerY = (posY[0] + posY[ny]) / 2;
@@ -240,10 +238,14 @@ function AnimatedBeam({ ni, nj, color, secH = 0.35, secB = 0.3, opacity = 1, emi
     if (anim.progress >= 1) setPhase('placed');
   });
 
-  if (len < 0.01 || !renderGeom) return null;
-
-  const isXray = displayMode === 'xray';
-  const isWireframe = displayMode === 'wireframe';
+  // Selection pulse animation
+  const pulseRef = useRef(0);
+  const [glowIntensity, setGlowIntensity] = useState(0);
+  useFrame(({ clock }) => {
+    if (!isSelected) { if (glowIntensity !== 0) setGlowIntensity(0); return; }
+    pulseRef.current = 0.7 + Math.sin(clock.elapsedTime * 3) * 0.3;
+    setGlowIntensity(pulseRef.current);
+  });
 
   // Animated opacity: fade in during first 0.15s of animation
   const [currentOpacity, setCurrentOpacity] = useState(0);
@@ -258,16 +260,12 @@ function AnimatedBeam({ ni, nj, color, secH = 0.35, secB = 0.3, opacity = 1, emi
     setCurrentOpacity(Math.min(1, elapsed / 0.15));
   });
 
-  const matOpacity = Math.min(opacity, currentOpacity);
+  if (len < 0.01 || !renderGeom) return null;
 
-  // Selection pulse animation
-  const pulseRef = useRef(0);
-  const [glowIntensity, setGlowIntensity] = useState(0);
-  useFrame(({ clock }) => {
-    if (!isSelected) { if (glowIntensity !== 0) setGlowIntensity(0); return; }
-    pulseRef.current = 0.7 + Math.sin(clock.elapsedTime * 3) * 0.3;
-    setGlowIntensity(pulseRef.current);
-  });
+  const isXray = displayMode === 'xray';
+  const isWireframe = displayMode === 'wireframe';
+
+  const matOpacity = Math.min(opacity, currentOpacity);
 
   const selOpacity = isSelected ? 1 : matOpacity;
   const SEL_COLOR = '#9C27B0';
@@ -280,7 +278,7 @@ function AnimatedBeam({ ni, nj, color, secH = 0.35, secB = 0.3, opacity = 1, emi
         <mesh
           castShadow={!isWireframe} receiveShadow={!isWireframe}
           geometry={renderGeom}
-          onClick={(e) => { e.stopPropagation(); onSelect?.({ ctrlKey: (e as any).nativeEvent?.ctrlKey ?? false, shiftKey: (e as any).nativeEvent?.shiftKey ?? false }); }}
+          onClick={(e: ThreeEvent<MouseEvent>) => { e.stopPropagation(); onSelect?.({ ctrlKey: e.nativeEvent.ctrlKey, shiftKey: e.nativeEvent.shiftKey }); }}
         >
           {isWireframe ? (
             <meshStandardMaterial color="#00D4FF" wireframe metalness={0} roughness={0.8} transparent opacity={0.4} />
@@ -304,7 +302,7 @@ function AnimatedBeam({ ni, nj, color, secH = 0.35, secB = 0.3, opacity = 1, emi
       )}
       {/* X-ray transparent fill */}
       {isXray && (
-        <mesh geometry={renderGeom} onClick={(e) => { e.stopPropagation(); onSelect?.({ ctrlKey: (e as any).nativeEvent?.ctrlKey ?? false, shiftKey: (e as any).nativeEvent?.shiftKey ?? false }); }}>
+        <mesh geometry={renderGeom} onClick={(e: ThreeEvent<MouseEvent>) => { e.stopPropagation(); onSelect?.({ ctrlKey: e.nativeEvent.ctrlKey, shiftKey: e.nativeEvent.shiftKey }); }}>
           <meshStandardMaterial color={col} transparent opacity={0.08 * selOpacity} depthWrite={false} />
         </mesh>
       )}
@@ -364,7 +362,7 @@ function FrameModel({ data, showColorMap, currentStep, buildPhase, animate = fal
       groups.push({ floorIdx: f, columns, beams: beamsNextFloor });
     }
     return groups;
-  }, [data, floorLevels]);
+  }, [data, floorLevels, nodeMap]);
 
   const bbox = useMemo(() => data.bounding_box, [data]);
 
@@ -392,7 +390,7 @@ function FrameModel({ data, showColorMap, currentStep, buildPhase, animate = fal
 
   function renderEl(el: MockElement, ni: THREE.Vector3, nj: THREE.Vector3, isColumn: boolean, floorIdx: number) {
     const cmap = data.color_map?.[String(el.id)];
-    const raw = cmap ? (cmap as any)[colorMode] ?? 0.5 : 0.5;
+    const raw = cmap ? Number((cmap as Record<string, unknown>)[colorMode]) || 0.5 : 0.5;
     const ratio = colorMode === 'slenderness_ratio' ? raw / 150 : raw;
     const isHighStress = ratio > 0.8;
     // 建模阶段：按楼层配色（视觉分层清晰）；其余阶段：应力比配色或构件类型默认色
@@ -580,10 +578,12 @@ function WindAnimation({ bbox }: { bbox: MockData['bounding_box'] }) {
     const minX = bbox.min[0] - 10;
     const rangeX = bbox.max[0] - bbox.min[0] + 28;
     for (let i = 0; i < numParticles; i++) {
+      /* eslint-disable react-hooks/purity -- intentional randomness for particle initialization */
       pos[i * 3] = minX + Math.random() * rangeX;
       pos[i * 3 + 1] = bbox.min[1] - 5 + Math.random() * (bbox.max[1] - bbox.min[1] + 10);
       pos[i * 3 + 2] = 0.5 + Math.random() * bbox.max[2] * 1.5;
       vel[i] = 0.4 + Math.random() * 0.6;
+      /* eslint-enable react-hooks/purity */
     }
     return { initPos: pos, velocities: vel };
   }, [bbox]);
@@ -803,7 +803,6 @@ function EnvWithFallback() {
 function ProceduralEnv() {
   const { scene, gl } = useThree();
   useEffect(() => {
-    const envScene = new THREE.Scene();
     // gradient hemisphere-like background
     const canvas = document.createElement('canvas');
     canvas.width = 512; canvas.height = 256;
@@ -818,6 +817,7 @@ function ProceduralEnv() {
     texture.mapping = THREE.EquirectangularReflectionMapping;
     const pmrem = new THREE.PMREMGenerator(gl);
     const envMap = pmrem.fromEquirectangular(texture).texture;
+    // eslint-disable-next-line react-hooks/immutability -- intentional scene environment setup
     scene.environment = envMap;
     scene.backgroundBlurriness = 0;
     texture.dispose();
@@ -844,15 +844,16 @@ function Lights({ shadows = true }: { shadows?: boolean }) {
 
 // ── View Controller: listens for preset view events ──────────
 
-function ViewController({ controlsRef, center, boundingBox }: { controlsRef: any; center: [number, number, number]; boundingBox?: MockData['bounding_box'] }) {
+function ViewController({ controlsRef, center, boundingBox }: { controlsRef: React.MutableRefObject<{ target: THREE.Vector3; update: () => void } | null>; center: [number, number, number]; boundingBox?: MockData['bounding_box'] }) {
   const { camera } = useThree();
+  const fov = (camera as THREE.PerspectiveCamera).fov;
   const dist = useMemo(() => {
     if (!boundingBox) return 40;
     const s = Math.max(boundingBox.max[0] - boundingBox.min[0],
                        boundingBox.max[1] - boundingBox.min[1],
                        boundingBox.max[2] - boundingBox.min[2], 1);
-    return (s / 2) / Math.tan(((camera as THREE.PerspectiveCamera).fov || 40) * Math.PI / 360) / 0.6;
-  }, [boundingBox, (camera as THREE.PerspectiveCamera).fov]);
+    return (s / 2) / Math.tan((fov || 40) * Math.PI / 360) / 0.6;
+  }, [boundingBox, fov]);
 
   useEffect(() => {
     const handler = (e: Event) => {
@@ -922,13 +923,15 @@ export default function ThreeCanvas() {
     setAutoRotate,
   } = useStore();
   const [buildPhase, setBuildPhase] = useState(0);
-  const controlsRef = useRef<any>(null);
+  const controlsRef = useRef<{ target: THREE.Vector3; update: () => void } | null>(null);
 
   // Build animation: 楼层渐进展示 + 自动旋转
   useEffect(() => {
     if (currentStep === 'modeling') {
+      /* eslint-disable react-hooks/set-state-in-effect -- intentional build phase animation */
       setAutoRotate(true);
       setBuildPhase(0.05);
+      /* eslint-enable react-hooks/set-state-in-effect */
       // 进入建模时重置剖面切割（避免残留分割平面）
       useStore.getState().setSectionPlane(0);
       const steps = 28;
@@ -953,16 +956,16 @@ export default function ThreeCanvas() {
     const generated = baseParams ? generateModel(baseParams) : DEFAULT_DATA;
 
     if (threeDData) {
-      const d = threeDData as any;
+      const d = threeDData as Record<string, unknown>;
       return {
-        nodes: d.nodes || generated.nodes,
-        elements: d.elements || generated.elements,
-        deformed_nodes: d.deformed_nodes || generated.deformed_nodes,
-        color_map: d.color_map || generated.color_map,
-        section_dimensions: d.section_dimensions || generated.section_dimensions,
-        bounding_box: d.bounding_box || generated.bounding_box,
-        load_arrows: d.load_arrows || generated.load_arrows,
-        supports: d.supports || generated.supports,
+        nodes: (d.nodes as MockNode[]) || generated.nodes,
+        elements: (d.elements as MockElement[]) || generated.elements,
+        deformed_nodes: (d.deformed_nodes as MockNode[]) || generated.deformed_nodes,
+        color_map: (d.color_map as Record<string, MockColorEntry>) || generated.color_map,
+        section_dimensions: (d.section_dimensions as Record<string, { height: number; width: number }>) || generated.section_dimensions,
+        bounding_box: (d.bounding_box as MockData['bounding_box']) || generated.bounding_box,
+        load_arrows: (d.load_arrows as MockArrow[]) || generated.load_arrows,
+        supports: (d.supports as MockSupport[]) || generated.supports,
       };
     }
     return generated;
