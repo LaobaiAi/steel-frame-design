@@ -438,10 +438,7 @@ class OpenSeesRunner(CAIAOServer):
 
             # 当单元沿 Z 方向（柱），用 X 作为参考
             # 当单元在水平面内（梁），用 Z 作为参考
-            if abs(dx) < 0.001 and abs(dy) < 0.001:
-                ref_vec = (1, 0, 0)  # 柱：X 为参考
-            else:
-                ref_vec = (0, 0, 1)  # 梁：Z 为参考
+            ref_vec = (1, 0, 0) if abs(dx) < 0.001 and abs(dy) < 0.001 else (0, 0, 1)
 
             ops.geomTransf("Linear", ele_tag, *ref_vec)
 
@@ -499,7 +496,9 @@ class OpenSeesRunner(CAIAOServer):
                     continue
                 ni = next(n for n in nodes if n["id"] == el["node_i"])
                 nj = next(n for n in nodes if n["id"] == el["node_j"])
-                dx = nj["x"] - ni["x"]; dy = nj["y"] - ni["y"]; dz = nj["z"] - ni["z"]
+                dx = nj["x"] - ni["x"]
+                dy = nj["y"] - ni["y"]
+                dz = nj["z"] - ni["z"]
                 L = math.sqrt(dx*dx + dy*dy + dz*dz)
                 if L < 1e-6:
                     continue

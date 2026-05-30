@@ -48,11 +48,8 @@ class SteelCodeCheck(CAIAOServer):
         # 单位转换：m → cm
         A_cm2 = sec.get("A", 0.01) * 10000
         Wx_cm3 = sec.get("Wx", A_cm2 * 0.1 / 10000) * 1000000
-        Wy_cm3 = sec.get("Wy", Wx_cm3 * 0.5) if sec.get("Wy") else Wx_cm3 * 0.5
         ix_cm = sec.get("ix", 0.1) * 100
         iy_cm = sec.get("iy", 0.05) * 100
-        Ix_m4 = sec.get("Ix", 0)
-        Iy_m4 = sec.get("Iy", 0)
 
         length_m = length
         length_cm = length * 100
@@ -62,7 +59,6 @@ class SteelCodeCheck(CAIAOServer):
         Mz = abs(forces.get("Mz", 0))
 
         fy_MPa = mat.get("fy", 2.35e5) / 1000  # kN/m² → MPa
-        E_MPa = mat.get("E", 2.06e8) / 1000
 
         gamma_x = 1.05  # 塑性发展系数
 
@@ -144,7 +140,6 @@ class SteelCodeCheck(CAIAOServer):
                  "value": f"{sigma_stab:.2f} MPa"},
                 {"label": "强度设计值 f", "value": f"{fy_MPa:.0f} MPa"},
             ]
-            stab_total_ratio = sigma_stab / fy_MPa
             stability_result = f"稳定比 = {sigma_stab:.2f}/{fy_MPa:.0f} = {stab_ratio:.4f}"
 
         # ── 挠度验算 ──────────────────────────────────────────
@@ -163,7 +158,6 @@ class SteelCodeCheck(CAIAOServer):
         # ── 长细比验算 ────────────────────────────────────────
         sl_end_limit = 120 if is_column else 150
         i_min_cm = min(ix_cm, iy_cm)
-        deflection_steps_val = lambda_max
         slenderness_steps = [
             {"label": "计算长度 l₀", "value": f"{l0_cm:.0f} cm"},
             {"label": "回转半径 i_min", "value": f"{i_min_cm:.2f} cm"},
@@ -406,7 +400,6 @@ class SteelCodeCheck(CAIAOServer):
     def check_code(self, input_data: dict) -> dict:
         model = input_data["model"]
         analysis_results = input_data["analysis_results"]
-        load_case_name = input_data.get("load_case_name", "Dead")
 
         deflection_limit_ratio = input_data.get("deflection_limit_ratio", 250)
         slenderness_limit = input_data.get("slenderness_limit", 150)
