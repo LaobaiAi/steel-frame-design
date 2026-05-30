@@ -2,8 +2,8 @@ import { useStore } from '../store/useStore';
 
 export function exportModelToDesktop() {
   const state = useStore.getState();
-  const params = state.engineeringParams as Record<string, any> || {};
-  const threeDData = state.threeDData as any;
+  const params = state.engineeringParams as Record<string, unknown> || {};
+  const threeDData = state.threeDData as Record<string, unknown> | null;
   const pipelineSteps = state.pipelineSteps;
 
   // Collect model data for export

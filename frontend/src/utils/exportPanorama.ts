@@ -568,10 +568,10 @@ import { useStore } from '../store/useStore';
 export async function exportPanoramaFromStore(): Promise<void> {
   const state = useStore.getState();
 
-  const params = state.engineeringParams as Record<string, any> | undefined;
+  const params = state.engineeringParams as Record<string, unknown> | undefined;
   const steps = state.pipelineSteps;
-  const analysisResults = state.analysisResults as Record<string, any> | null;
-  const checkResults = state.codeCheckResults as Record<string, any> | null;
+  const analysisResults = state.analysisResults as Record<string, unknown> | null;
+  const checkResults = state.codeCheckResults as Record<string, unknown> | null;
 
   const totalStories = params?.num_stories ?? 4;
   const heights: number[] = params?.story_heights ?? [4.5, 3.6, 3.6, 3.6];
@@ -583,11 +583,11 @@ export async function exportPanoramaFromStore(): Promise<void> {
   let maxStressRatio = 0;
 
   if (checkResults?.elements) {
-    const els = checkResults.elements as any[];
+    const els = checkResults.elements as Array<Record<string, unknown>>;
     totalElements = els.length;
-    passed = els.filter((e: any) => e.pass).length;
+    passed = els.filter((e) => Boolean(e.pass)).length;
     failed = totalElements - passed;
-    maxStressRatio = Math.max(...els.map((e: any) => e.stress_ratio ?? 0));
+    maxStressRatio = Math.max(...els.map((e) => Number(e.stress_ratio ?? 0)));
   } else if (steps.length > 0) {
     const checkStep = steps[3];
     passed = checkStep?.passed ?? 0;
@@ -605,7 +605,7 @@ export async function exportPanoramaFromStore(): Promise<void> {
     columnSection: (params?.column_section as string) ?? 'HW400x400x13x21',
     beamSection: (params?.beam_section as string) ?? 'HM390x300x10x16',
     projectName: (params?.name as string) ?? '钢框架办公楼',
-    maxDisplacement: (analysisResults as any)?.summary?.max_displacement ?? (params as any)?.max_displacement ?? 12.5,
+    maxDisplacement: ((analysisResults as Record<string, unknown>)?.summary as Record<string, unknown>)?.max_displacement as number ?? (params as Record<string, unknown>)?.max_displacement as number ?? 12.5,
     totalElements,
     passed,
     failed,
