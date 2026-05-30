@@ -15,7 +15,7 @@ API Key 优先级：环境变量 LLM_API_KEY > 入参 llm_config.api_key
 
 import json
 import os
-from typing import Any
+
 from servers.base import CAIAOServer, tool
 
 DEFAULT_MODEL = "gpt-4o-mini"

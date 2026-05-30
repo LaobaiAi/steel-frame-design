@@ -15,6 +15,7 @@ llm_agent_orchestrator.py — CAIAO 合并 Server：LLM Agent 自主编排循环
 """
 
 import json
+
 from servers.base import CAIAOServer, tool
 
 AGENT_SYSTEM_PROMPT = """你是一个钢框架设计 AI Agent。你可以使用以下工具完成钢框架设计任务：

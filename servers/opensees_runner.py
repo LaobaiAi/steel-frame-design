@@ -13,6 +13,7 @@ import math
 import sys
 
 import numpy as np
+
 from servers.base import CAIAOServer, tool
 
 # ── OpenSeesPy 初始化（含 Windows DLL 路径处理）───────────────────
@@ -27,7 +28,7 @@ try:
     if _os.path.isdir(_pkg_dir) and hasattr(_os, "add_dll_directory"):
         _os.add_dll_directory(_os.path.abspath(_pkg_dir))
 
-    import openseespy.opensees as _ops
+    import openseespy.opensees  # noqa: F401
     _OPENSEES_AVAILABLE = True
 except Exception:
     pass
@@ -147,10 +148,7 @@ class OpenSeesRunner(CAIAOServer):
                 z_global = np.array([0.0, 1.0, 0.0])
             y_prime = np.cross(z_global, x_prime)
             y_norm = np.linalg.norm(y_prime)
-            if y_norm < 1e-12:
-                y_prime = np.array([0.0, 1.0, 0.0])
-            else:
-                y_prime = y_prime / y_norm
+            y_prime = np.array([0.0, 1.0, 0.0]) if y_norm < 1e-12 else y_prime / y_norm
             z_prime = np.cross(x_prime, y_prime)
         else:
             z_prime = np.cross(x_prime, y_axis)
@@ -430,7 +428,6 @@ class OpenSeesRunner(CAIAOServer):
 
             n_i = node_id_to_tag[elem["node_i"]]
             n_j = node_id_to_tag[elem["node_j"]]
-            xi_vec = [n["x"] for n in nodes if n["id"] == elem["node_i"]][0] if False else None
 
             # 计算单元方向，自动选择参考向量
             ni_coord = next(n for n in nodes if n["id"] == elem["node_i"])

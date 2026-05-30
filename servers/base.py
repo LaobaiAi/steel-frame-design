@@ -17,7 +17,7 @@ CAIAO Server 契约（v1.0）:
 
 import json
 import sys
-from typing import Any, Callable
+from typing import Callable
 
 # ── 轻量工具注册装饰器 ───────────────────────────────────────────
 

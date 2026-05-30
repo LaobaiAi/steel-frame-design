@@ -11,7 +11,6 @@
 - color_map: 基于应力比的构件颜色映射
 """
 
-import math
 from servers.base import CAIAOServer, tool
 
 

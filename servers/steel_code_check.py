@@ -7,6 +7,7 @@
 """
 
 import math
+
 from servers.base import CAIAOServer, tool
 
 
@@ -460,7 +461,7 @@ class SteelCodeCheck(CAIAOServer):
             lc_name = ar.get("load_case", ar.get("name", "unknown"))
             if "element_forces" in ar:
                 for eid, fvals in ar["element_forces"].items():
-                    forces_by_case.setdefault(lc_name, {}).setdefault(eid, {k: 0.0 for k in force_keys})
+                    forces_by_case.setdefault(lc_name, {}).setdefault(eid, dict.fromkeys(force_keys, 0.0))
                     for k in force_keys:
                         forces_by_case[lc_name][eid][k] += fvals.get(k, 0.0)
 
@@ -472,10 +473,10 @@ class SteelCodeCheck(CAIAOServer):
         # Combo5: 1.0*D + 1.5*W  (风吸力)
 
         def get_case_forces(case_name: str, elem_id: str) -> dict[str, float]:
-            return forces_by_case.get(case_name, {}).get(elem_id, {k: 0.0 for k in force_keys})
+            return forces_by_case.get(case_name, {}).get(elem_id, dict.fromkeys(force_keys, 0.0))
 
         def combine_for_element(elem_id: str, coeffs: list[tuple[float, str]]) -> dict[str, float]:
-            result = {k: 0.0 for k in force_keys}
+            result = dict.fromkeys(force_keys, 0.0)
             for factor, case_name in coeffs:
                 cf = get_case_forces(case_name, elem_id)
                 for k in force_keys:
@@ -496,8 +497,8 @@ class SteelCodeCheck(CAIAOServer):
         for el in model["elements"]:
             eid = str(el["id"])
             combos = [combine_for_element(eid, coeffs) for _, coeffs in combo_formulas]
-            env = {k: 0.0 for k in force_keys}
-            env_source = {k: "-" for k in force_keys}
+            env = dict.fromkeys(force_keys, 0.0)
+            env_source = dict.fromkeys(force_keys, "-")
             combo_forces = []
             for (cname, _), combo in zip(combo_formulas, combos):
                 combo_forces.append({"name": cname, "forces": dict(combo)})

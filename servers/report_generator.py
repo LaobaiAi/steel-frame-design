@@ -7,8 +7,8 @@
 """
 
 import os
-import json
 from datetime import datetime
+
 from servers.base import CAIAOServer, tool
 
 try:

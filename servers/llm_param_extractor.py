@@ -14,6 +14,7 @@ CAIAO 设计原则：
 """
 
 import json
+
 from servers.base import CAIAOServer, tool
 
 # ── 参数提取的 System Prompt ──────────────────────────────────────

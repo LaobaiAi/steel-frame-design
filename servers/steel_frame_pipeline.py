@@ -10,8 +10,9 @@
 Hub 调度模式（v2.0）：通过 caiao_hub.Hub 统一调度，Server 间零直接依赖。
 """
 
-import os
 import json
+import os
+
 from servers.base import CAIAOServer, tool
 
 
@@ -40,11 +41,11 @@ class SteelFramePipeline(CAIAOServer):
 
         # 若未提供 Hub，回退到直接实例化（向后兼容）
         if self._hub is None:
+            from servers.opensees_runner import OpenSeesRunner
+            from servers.report_generator import ReportGenerator
+            from servers.steel_code_check import SteelCodeCheck
             from servers.steel_frame_generator import SteelFrameGenerator
             from servers.steel_load_generator import SteelLoadGenerator
-            from servers.opensees_runner import OpenSeesRunner
-            from servers.steel_code_check import SteelCodeCheck
-            from servers.report_generator import ReportGenerator
 
             self._generator = SteelFrameGenerator()
             self._loader = SteelLoadGenerator()

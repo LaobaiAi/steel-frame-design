@@ -17,9 +17,9 @@ CAIAO 合并 Server — 通过 Hub 调度原子 Server。
 - 领域逻辑全部委托给原子 Server
 """
 
+import json
 import os
 import sys
-import json
 import traceback
 
 # PyInstaller 打包兼容
@@ -34,8 +34,8 @@ if _ROOT not in sys.path:
 try:
     from fastapi import FastAPI, HTTPException, Request
     from fastapi.middleware.cors import CORSMiddleware
-    from fastapi.staticfiles import StaticFiles
     from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
+    from fastapi.staticfiles import StaticFiles
 except ImportError:
     print("需要安装 FastAPI: pip install fastapi uvicorn")
     sys.exit(1)
@@ -222,9 +222,9 @@ async def startup():
     hub = Hub()
 
     # 注册需要 hub 引用的 Server（覆盖自动发现的 hub=None 实例）
-    from servers.steel_frame_pipeline import SteelFramePipeline
     from servers.llm_agent_orchestrator import LLMAgentOrchestrator
     from servers.llm_param_extractor import LLMParamExtractor
+    from servers.steel_frame_pipeline import SteelFramePipeline
 
     pipeline = SteelFramePipeline(hub=hub)
     agent_orch = LLMAgentOrchestrator(hub=hub)
@@ -258,7 +258,7 @@ async def startup():
         "tools": ["run_analysis"],
     })
 
-    print(f"[WebAPI] 注册子进程 Server 'fea_runner' (lazy, tools: run_analysis)")
+    print("[WebAPI] 注册子进程 Server 'fea_runner' (lazy, tools: run_analysis)")
     print(f"[WebAPI] 总计: {hub.get_server_count()} Servers, {hub.get_tool_count()} Tools")
 
 
@@ -533,7 +533,8 @@ else:
 
 def _cleanup_port(port: int):
     """启动前清理占用指定端口的旧进程（Windows）。"""
-    import subprocess, time
+    import subprocess
+    import time
     try:
         out = subprocess.check_output(
             f'netstat -ano | findstr LISTENING | findstr ":{port}"',
