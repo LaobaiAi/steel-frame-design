@@ -844,7 +844,7 @@ function Lights({ shadows = true }: { shadows?: boolean }) {
 }
 
 // ── View Controller: listens for preset view events ──────────
-
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- OrbitControls ref must match drei's expected type
 function ViewController({ controlsRef, center, boundingBox }: { controlsRef: React.MutableRefObject<any>; center: [number, number, number]; boundingBox?: MockData['bounding_box'] }) {
   const { camera } = useThree();
   const fov = (camera as THREE.PerspectiveCamera).fov;
