@@ -127,6 +127,7 @@ This project enforces **[Conventional Commits 1.0.0](https://www.conventionalcom
 | `caiao` | CAIAO base class, Hub, or protocol (`servers/base.py`, `caiao_hub.py`) |
 | `llm` | LLM gateway, agent, and param extractor servers |\n| `api` | Web API server (`servers/web_api_server.py`) |
 | `frontend` | React frontend application (`frontend/`) |
+| `review` | Code review reports and audit findings (`docs/CODE_REVIEW_*.md`) |
 | `docs` | Documentation (README, CONTRIBUTING, etc.) |
 | `ci` | GitHub Actions, CI/CD |
 
