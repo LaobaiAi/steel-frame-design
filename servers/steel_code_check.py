@@ -9,6 +9,7 @@
 import math
 
 from servers.base import CAIAOServer, tool
+from servers.defaults import COMBO_DEFS, COMBO_LABELS
 
 
 class SteelCodeCheck(CAIAOServer):
@@ -200,13 +201,7 @@ class SteelCodeCheck(CAIAOServer):
             force_keys = ["N", "Vy", "Vz", "T", "My", "Mz"]
             units = {"N": "kN", "Vy": "kN", "Vz": "kN", "T": "kN·m", "My": "kN·m", "Mz": "kN·m"}
             case_labels = {"Dead": "恒载", "Live": "活载", "Wind": "风载", "Seismic": "地震"}
-            combo_names = [
-                ("1.3D + 1.5L", "恒+活主导"),
-                ("1.3D + 1.5W", "恒+风主导"),
-                ("1.3D + 1.5L + 0.9W", "恒+活+风"),
-                ("1.3D + 1.3S", "恒+震"),
-                ("1.0D + 1.5W", "风吸力"),
-            ]
+            # 组合名称从 servers.defaults.COMBO_LABELS 获取
 
             def fmt_forces(f: dict) -> str:
                 parts = []
@@ -234,7 +229,7 @@ class SteelCodeCheck(CAIAOServer):
             force_steps.append({"label": "── 组合内力 ──", "value": ""})
             combos = force_summary.get("combos", [])
             for ci, c in enumerate(combos):
-                cn = combo_names[ci][0] if ci < len(combo_names) else f"Combo{ci+1}"
+                cn = COMBO_LABELS[ci][0] if ci < len(COMBO_LABELS) else f"Combo{ci+1}"
                 force_steps.append({
                     "label": f"  {cn}",
                     "value": fmt_forces(c.get("forces", {})),
@@ -474,23 +469,16 @@ class SteelCodeCheck(CAIAOServer):
             return result
 
         # 对每个构件取各组合的最大绝对值（包络设计），同时记录内力组合详情
-        combo_formulas = [
-            ("1.3D + 1.5L", [(1.3, "Dead"), (1.5, "Live")]),
-            ("1.3D + 1.5W", [(1.3, "Dead"), (1.5, "Wind")]),
-            ("1.3D + 1.5L + 0.9W", [(1.3, "Dead"), (1.5, "Live"), (0.9, "Wind")]),
-            ("1.3D + 1.3S", [(1.3, "Dead"), (1.3, "Seismic")]),
-            ("1.0D + 1.5W", [(1.0, "Dead"), (1.5, "Wind")]),
-        ]
-
+        # 荷载组合系数使用模块级 COMBO_DEFS 常量
         all_forces = {}
         all_force_details = {}  # eid → force_summary
         for el in model["elements"]:
             eid = str(el["id"])
-            combos = [combine_for_element(eid, coeffs) for _, coeffs in combo_formulas]
+            combos = [combine_for_element(eid, coeffs) for _, coeffs in COMBO_DEFS]
             env = dict.fromkeys(force_keys, 0.0)
             env_source = dict.fromkeys(force_keys, "-")
             combo_forces = []
-            for (cname, _), combo in zip(combo_formulas, combos, strict=True):
+            for (cname, _), combo in zip(COMBO_DEFS, combos, strict=True):
                 combo_forces.append({"name": cname, "forces": dict(combo)})
                 for k in force_keys:
                     if abs(combo[k]) > abs(env[k]):

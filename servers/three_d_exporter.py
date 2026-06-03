@@ -12,6 +12,7 @@
 """
 
 from servers.base import CAIAOServer, tool
+from servers.defaults import COLORMAP_STOPS
 
 
 class ThreeDExporter(CAIAOServer):
@@ -31,19 +32,21 @@ class ThreeDExporter(CAIAOServer):
         super().__init__()
 
     def _compute_color(self, ratio: float) -> str:
-        """根据应力比计算颜色：绿(0) → 黄(0.5) → 红(1.0+)。"""
+        """根据应力比计算颜色：绿→黄→红连续渐变（使用共享梯度定义）。"""
         clamped = min(max(ratio, 0.0), 1.0)
-        if clamped < 0.5:
-            # 绿 → 黄
-            g = 1.0
-            r = clamped * 2.0
-            b = 0.0
-        else:
-            # 黄 → 红
-            r = 1.0
-            g = 2.0 - clamped * 2.0
-            b = 0.0
-        return f"rgb({int(r*255)},{int(g*255)},{b})"
+        stops = COLORMAP_STOPS
+        # 在相邻两个色标间线性插值
+        for i in range(len(stops) - 1):
+            lo = stops[i]
+            hi = stops[i + 1]
+            if lo["ratio"] <= clamped <= hi["ratio"]:
+                t = (clamped - lo["ratio"]) / (hi["ratio"] - lo["ratio"])
+                r = int(lo["r"] + (hi["r"] - lo["r"]) * t)
+                g = int(lo["g"] + (hi["g"] - lo["g"]) * t)
+                b = int(lo["b"] + (hi["b"] - lo["b"]) * t)
+                return f"rgb({r},{g},{b})"
+        # 超出 1.0 返回红色
+        return "rgb(255,0,0)"
 
     def _compute_deformed_nodes(self, nodes: list, displacements: dict,
                                  scale_factor: float) -> list:

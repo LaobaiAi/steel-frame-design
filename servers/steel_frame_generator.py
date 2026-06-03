@@ -7,23 +7,7 @@
 """
 
 from servers.base import CAIAOServer, tool
-
-# ── 内置截面库（常用 H 型钢，单位：m）───────────────────────────
-
-BUILTIN_SECTIONS: dict[str, dict] = {
-    "HW300x300x10x15": {"A": 0.01204, "Ix": 2.05e-4, "Iy": 6.76e-5, "Wx": 1.37e-3, "Wy": 4.50e-4, "ix": 0.130, "iy": 0.075},
-    "HW350x350x12x19": {"A": 0.01736, "Ix": 4.03e-4, "Iy": 1.36e-4, "Wx": 2.30e-3, "Wy": 7.76e-4, "ix": 0.152, "iy": 0.088},
-    "HW400x400x13x21": {"A": 0.02187, "Ix": 6.69e-4, "Iy": 2.24e-4, "Wx": 3.34e-3, "Wy": 1.12e-3, "ix": 0.175, "iy": 0.101},
-    "HM244x175x7x11":  {"A": 0.00556, "Ix": 6.12e-5, "Iy": 9.84e-6, "Wx": 5.02e-4, "Wy": 1.12e-4, "ix": 0.105, "iy": 0.042},
-    "HM294x200x8x12":  {"A": 0.00730, "Ix": 1.14e-4, "Iy": 1.60e-5, "Wx": 7.79e-4, "Wy": 1.60e-4, "ix": 0.125, "iy": 0.047},
-    "HM340x250x9x14":  {"A": 0.01018, "Ix": 2.17e-4, "Iy": 3.65e-5, "Wx": 1.28e-3, "Wy": 2.92e-4, "ix": 0.146, "iy": 0.060},
-    "HM390x300x10x16": {"A": 0.01366, "Ix": 3.89e-4, "Iy": 7.21e-5, "Wx": 2.00e-3, "Wy": 4.81e-4, "ix": 0.169, "iy": 0.073},
-}
-
-BUILTIN_MATERIALS: dict[str, dict] = {
-    "Q235": {"name": "Q235", "E": 2.06e8, "fy": 2.35e5, "nu": 0.3, "density": 7850},
-    "Q355": {"name": "Q355", "E": 2.06e8, "fy": 3.55e5, "nu": 0.3, "density": 7850},
-}
+from servers.defaults import BUILTIN_SECTIONS, BUILTIN_MATERIALS
 
 
 class SteelFrameGenerator(CAIAOServer):

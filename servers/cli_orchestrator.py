@@ -14,6 +14,7 @@ import os
 import yaml
 
 from servers.base import CAIAOServer, tool
+from servers.defaults import DEFAULT_DESIGN_PARAMS, QUICK_DEMO_PARAMS
 
 
 class CliOrchestrator(CAIAOServer):
@@ -99,35 +100,9 @@ class CliOrchestrator(CAIAOServer):
                 except Exception as e:
                     return {"error": f"YAML parsing failed: {e}"}
             elif quick:
-                params = {
-                    "grid_x": [6.0, 6.0, 6.0],
-                    "grid_y": [6.0, 6.0],
-                    "num_stories": 4,
-                    "story_heights": [4.0, 3.5, 3.5, 3.5],
-                    "column_section": "HW350x350x12x19",
-                    "beam_section": "HM340x250x9x14",
-                    "material": "Q355",
-                    "name": "示例办公楼",
-                    "dead_load": 2.0,
-                    "live_load": 3.0,
-                    "wind_pressure": 0.45,
-                    "seismic_intensity": 0.08,
-                }
+                params = dict(QUICK_DEMO_PARAMS)
             else:
-                params = {
-                    "grid_x": [6.0, 6.0],
-                    "grid_y": [6.0],
-                    "num_stories": 3,
-                    "story_heights": [4.0, 3.5, 3.5],
-                    "column_section": "HW350x350x12x19",
-                    "beam_section": "HM340x250x9x14",
-                    "material": "Q235",
-                    "name": "示例框架",
-                    "dead_load": 1.5,
-                    "live_load": 2.0,
-                    "wind_pressure": 0.45,
-                    "seismic_intensity": 0.08,
-                }
+                params = dict(DEFAULT_DESIGN_PARAMS)
 
             params["output_dir"] = output_dir
             pipeline_result = self._call("run_full_pipeline", params)

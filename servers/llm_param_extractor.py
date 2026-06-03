@@ -16,6 +16,7 @@ CAIAO 设计原则：
 import json
 
 from servers.base import CAIAOServer, tool
+from servers.defaults import DEFAULT_DESIGN_PARAMS
 
 # ── 参数提取的 System Prompt ──────────────────────────────────────
 
@@ -89,31 +90,10 @@ class LLMParamExtractor(CAIAOServer):
     # ── 纯计算：默认值填充 ──────────────────────────────────────
 
     def _validate_and_fill_params(self, params: dict) -> dict:
-        """验证并填充默认参数。
-
-        纯计算逻辑：
-        1. 缺失字段填入合理默认值
-        2. story_heights 与 num_stories 不匹配时自动修正
-        3. 返回完整参数字典
-        """
-        defaults = {
-            "grid_x": [6.0, 6.0, 6.0],
-            "grid_y": [6.0, 6.0],
-            "num_stories": 4,
-            "story_heights": [4.0, 3.5, 3.5, 3.5],
-            "column_section": "HW350x350x12x19",
-            "beam_section": "HM340x250x9x14",
-            "material": "Q355",
-            "name": "Steel Frame",
-            "dead_load": 2.0,
-            "live_load": 3.0,
-            "wind_pressure": 0.45,
-            "seismic_intensity": 0.08,
-            "output_dir": "./output",
-        }
-
+        """验证并填充默认参数。缺失字段从共享默认值填充，
+        story_heights 与 num_stories 不匹配时自动修正。"""
         filled = {}
-        for key, default in defaults.items():
+        for key, default in DEFAULT_DESIGN_PARAMS.items():
             val = params.get(key, default)
             filled[key] = default if val is None else val
 
