@@ -10,21 +10,16 @@ import ApiSettingsModal from './ApiSettingsModal';
 import { api } from '../api/client';
 import type { RunPipelineParams } from '../types';
 import { parseDesignParams } from '../utils/parseDesignParams';
+import { computeMockStats } from '../utils/mockData';
 
 // ── Shared: generate mock results from engineering params ────────
 
 function generateMockResults(store: ReturnType<typeof useStore.getState>, params: RunPipelineParams) {
+  const { totalNodes, totalElements, totalCols, totalBeams, failed, passed } = computeMockStats(params);
   const nx = params.grid_x.length;
   const ny = params.grid_y.length;
   const nz = params.num_stories;
   const nCol = (nx + 1) * (ny + 1);
-  const totalNodes = nCol * (nz + 1);
-  const totalCols = nCol * nz;
-  const totalBeams = nz * ((ny + 1) * nx + (nx + 1) * ny);
-  const totalElements = totalCols + totalBeams;
-  // ~10% elements fail with stress ratios around 0.85-1.1
-  const failed = Math.max(1, Math.round(totalElements * 0.1));
-  const passed = totalElements - failed;
 
   const mockElements: Array<Record<string, unknown>> = [];
   let eid = 0;
@@ -300,6 +295,22 @@ function EngineeringForm() {
   const [activePreset, setActivePreset] = useState<number | null>(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
+
+  // 截面库和材料库（从后端 API 动态加载）
+  const [sectionOptions, setSectionOptions] = useState<{
+    column: string[]; beam: string[]; materials: string[];
+  }>({ column: ['HW400x400x13x21'], beam: ['HM390x300x10x16'], materials: ['Q355'] });
+  useEffect(() => {
+    api.getSections().then(data => {
+      setSectionOptions({
+        column: data.column_sections || [],
+        beam: data.beam_sections || [],
+        materials: data.material_grades || [],
+      });
+    }).catch(() => {
+      // 加载失败保持默认选项
+    });
+  }, []);
 
   // ── 导入已有项目 ──────────────────────────────────────────────
   const [showImportDropdown, setShowImportDropdown] = useState(false);
@@ -680,19 +691,19 @@ function EngineeringForm() {
             label="柱截面"
             value={form.column_section}
             onChange={v => updateField('column_section', v)}
-            options={['HW300x300x10x15', 'HW350x350x12x19', 'HW400x400x13x21']}
+            options={sectionOptions.column}
           />
           <SelectInput
             label="梁截面"
             value={form.beam_section}
             onChange={v => updateField('beam_section', v)}
-            options={['HM340x250x9x14', 'HM390x300x10x16', 'HM244x175x7x11']}
+            options={sectionOptions.beam}
           />
           <SelectInput
             label="钢材"
             value={form.material}
             onChange={v => updateField('material', v)}
-            options={['Q235', 'Q355']}
+            options={sectionOptions.materials}
           />
           <FloatingInput
             label="项目名称"

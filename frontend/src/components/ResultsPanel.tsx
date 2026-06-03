@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { useStore } from '../store/useStore';
 import { PieChart, CheckCircle, XCircle, AlertTriangle, Filter, ArrowUpDown, Minus, Plus, ChevronDown, ChevronRight, Download, CheckSquare } from 'lucide-react';
 import type { CodeCheckElement, CalcProcess, CalcStep } from '../types';
+import { generateCalcProcesses, getMockElements } from '../utils/mockData';
 
 type TypeFilter = 'all' | 'column' | 'beam';
 type StatusFilter = 'all' | 'pass' | 'fail' | 'warning';
@@ -11,12 +12,20 @@ type SortDir = 'asc' | 'desc';
 
 // ── Color helpers with dynamic thresholds ──────────────────────────
 
-function stressColor(ratio: number, safeLimit: number, criticalLimit: number) {
-  if (ratio > criticalLimit)         return { bg: 'rgba(255,68,0,0.18)', dot: '#FF4400' };
-  if (ratio > criticalLimit - 0.15)  return { bg: 'rgba(255,136,0,0.15)', dot: '#FF8800' };
-  if (ratio > safeLimit + 0.05)      return { bg: 'rgba(255,204,0,0.12)', dot: '#FFCC00' };
-  if (ratio > safeLimit - 0.15)      return { bg: 'rgba(170,221,0,0.12)', dot: '#AADD00' };
-  return { bg: 'rgba(50,204,102,0.12)', dot: '#32CC66' };
+// 应力比颜色映射 — 与 servers/defaults.py COLORMAP_THRESHOLDS 保持一致
+const COLOR_THRESHOLDS = [
+  { max: 0.5,  dot: '#32CC66', bg: 'rgba(50,204,102,0.12)' },
+  { max: 0.65, dot: '#AADD00', bg: 'rgba(170,221,0,0.12)' },
+  { max: 0.8,  dot: '#FFCC00', bg: 'rgba(255,204,0,0.12)' },
+  { max: 0.95, dot: '#FF8800', bg: 'rgba(255,136,0,0.15)' },
+  { max: Infinity, dot: '#FF4400', bg: 'rgba(255,68,0,0.18)' },
+];
+
+function stressColor(ratio: number) {
+  for (const t of COLOR_THRESHOLDS) {
+    if (ratio <= t.max) return { bg: t.bg, dot: t.dot };
+  }
+  return { bg: COLOR_THRESHOLDS[COLOR_THRESHOLDS.length - 1].bg, dot: COLOR_THRESHOLDS[COLOR_THRESHOLDS.length - 1].dot };
 }
 
 function ratioClass(ratio: number, safeLimit: number, criticalLimit: number): StatusFilter {
@@ -39,161 +48,7 @@ const STATUS_LABEL: Record<StatusFilter, string> = {
   all: '全部', pass: '通过', fail: '超限', warning: '警告',
 };
 
-// ── Mock data ─────────────────────────────────────────────────────
-
-function generateCalcProcesses(el: Pick<CodeCheckElement, 'type' | 'section' | 'stress_ratio' | 'stability_ratio' | 'deflection_ratio' | 'slenderness_ratio' | 'story'>): CalcProcess[] {
-  const isColumn = el.type === 'column';
-  const f = 305; // Q355
-  const sr = el.stress_ratio;
-  const limit = 1.0;
-
-  // Section properties
-  const A = isColumn ? 218.7 : 133.2;       // cm²
-  const Wx = isColumn ? 3330 : 2000;         // cm³
-  const ix = isColumn ? 17.4 : 17.1;         // cm
-  const iy = isColumn ? 10.1 : 7.36;         // cm
-  const length = isColumn ? (el.story === 1 ? 4.5 : 3.6) : 6.0; // m
-
-  // ── 强度验算 ──────────────────────────────────────────────────────
-  const totalStress = sr * f;
-  let strengthSteps: CalcStep[];
-  let strengthResultLine: string;
-
-  if (isColumn) {
-    const axialPart = totalStress * 0.55;
-    const bendPart = totalStress * 0.45;
-    const N = +(axialPart * A / 10).toFixed(1);
-    const Mx = +(bendPart * 1.05 * Wx / 1000).toFixed(1);
-    const sigmaN = +(N * 10 / A).toFixed(2);
-    const sigmaM = +(Mx * 1000 / (1.05 * Wx)).toFixed(2);
-    strengthSteps = [
-      { label: '轴力 N', value: `${N} kN` },
-      { label: '弯矩 Mx', value: `${Mx} kN·m` },
-      { label: '截面积 A', value: `${A} cm²` },
-      { label: '截面模量 Wx', value: `${Wx} cm³` },
-      { label: '塑性发展系数 γx', value: '1.05' },
-      { label: `σ = N/A + Mx/(γx·Wx)`, value: `${sigmaN} + ${sigmaM} = ${(sigmaN + sigmaM).toFixed(2)} MPa` },
-      { label: '强度设计值 f', value: `${f} MPa` },
-    ];
-    strengthResultLine = `应力比 = ${(sigmaN + sigmaM).toFixed(2)}/${f} = ${sr.toFixed(4)}`;
-  } else {
-    const Mx = +(totalStress * 1.05 * Wx / 1000).toFixed(1);
-    const sigma = +(Mx * 1000 / (1.05 * Wx)).toFixed(2);
-    strengthSteps = [
-      { label: '弯矩 Mx', value: `${Mx} kN·m` },
-      { label: '截面模量 Wx', value: `${Wx} cm³` },
-      { label: '塑性发展系数 γx', value: '1.05' },
-      { label: `σ = Mx/(γx·Wx)`, value: `${sigma} MPa` },
-      { label: '强度设计值 f', value: `${f} MPa` },
-    ];
-    strengthResultLine = `应力比 = ${sigma.toFixed(2)}/${f} = ${sr.toFixed(4)}`;
-  }
-
-  // ── 稳定验算 ──────────────────────────────────────────────────────
-  const l0 = length * 100; // cm
-  const lambda = +(l0 / ix).toFixed(1);
-  const phi = +(0.986 - 0.0016 * lambda).toFixed(4); // approximate b-curve
-  const NEx = +((3.1416 ** 2 * 206000 * A * 100) / (1.1 * lambda ** 2) / 1000).toFixed(0);
-  let stabilitySteps: CalcStep[];
-  let stabilityResultLine: string;
-
-  if (isColumn) {
-    const N = +(totalStress * 0.55 * A / 10).toFixed(1);
-    const Mx = +(totalStress * 0.45 * 1.05 * Wx / 1000).toFixed(1);
-    const phiA = +(N * 10 / (phi * A)).toFixed(2);
-    const betaMx = 1.0;
-    const denom = 1 - 0.8 * N / NEx;
-    const mxTerm = +(betaMx * Mx * 1000 / (1.05 * Wx * denom)).toFixed(2);
-    stabilitySteps = [
-      { label: '计算长度 l₀', value: `${l0.toFixed(0)} cm` },
-      { label: '回转半径 ix', value: `${ix} cm` },
-      { label: '长细比 λ = l₀/ix', value: `${lambda}` },
-      { label: '稳定系数 φ (b类)', value: `${phi}` },
-      { label: `N/(φ·A)`, value: `${phiA} MPa` },
-      { label: `欧拉力 NEx' = π²EA/(1.1λ²)`, value: `${NEx} kN` },
-      { label: '等效弯矩系数 βmx', value: `${betaMx}` },
-      { label: `βmx·Mx/(γx·Wx·(1-0.8N/NEx'))`, value: `${mxTerm} MPa` },
-      { label: `σ = N/(φ·A) + βmx·Mx/(γx·Wx·(1-0.8N/NEx'))`, value: `${(phiA + mxTerm).toFixed(2)} MPa` },
-      { label: '强度设计值 f', value: `${f} MPa` },
-    ];
-    stabilityResultLine = `稳定比 = ${(phiA + mxTerm).toFixed(2)}/${f} = ${el.stability_ratio.toFixed(4)}`;
-  } else {
-    const phiB = +(0.76 + 0.24 * (iy / ix)).toFixed(4); // simplified
-    stabilitySteps = [
-      { label: '整体稳定系数 φb', value: `${phiB}` },
-      { label: `σ = Mx/(φb·Wx)`, value: `${(totalStress / phiB).toFixed(2)} MPa` },
-      { label: '强度设计值 f', value: `${f} MPa` },
-    ];
-    stabilityResultLine = `稳定比 = ${(totalStress / phiB).toFixed(2)}/${f} = ${el.stability_ratio.toFixed(4)}`;
-  }
-
-  // ── 挠度验算 ──────────────────────────────────────────────────────
-  const span = length * 1000; // mm
-  const allowDefl = +(span / 250).toFixed(1);
-  const maxDefl = +(allowDefl * el.deflection_ratio).toFixed(1);
-  const deflectionSteps: CalcStep[] = [
-    { label: '计算跨度 L', value: `${span} mm` },
-    { label: '最大挠度 δ (弹性分析)', value: `${maxDefl} mm` },
-    { label: '容许挠度 [δ] = L/250', value: `${allowDefl} mm` },
-  ];
-  const deflectionResultLine = `挠度比 = ${maxDefl}/${allowDefl} = ${el.deflection_ratio.toFixed(4)}`;
-
-  // ── 长细比验算 ───────────────────────────────────────────────────
-  const slendernessLimit = isColumn ? 120 : 150;
-  const slendernessSteps: CalcStep[] = [
-    { label: '计算长度 l₀', value: `${l0.toFixed(0)} cm` },
-    { label: '回转半径 i_min', value: `${iy} cm` },
-    { label: '长细比 λ = l₀/i', value: `${el.slenderness_ratio.toFixed(1)}` },
-    { label: `容许长细比 [λ]`, value: `${slendernessLimit}` },
-  ];
-  const slendernessResultLine = `λ/[λ] = ${(el.slenderness_ratio / slendernessLimit).toFixed(4)}`;
-
-  return [
-    { title: '强度验算', steps: strengthSteps, resultLine: strengthResultLine, passed: sr <= limit },
-    { title: '稳定验算', steps: stabilitySteps, resultLine: stabilityResultLine, passed: el.stability_ratio <= limit },
-    { title: '挠度验算', steps: deflectionSteps, resultLine: deflectionResultLine, passed: el.deflection_ratio <= limit },
-    { title: '长细比验算', steps: slendernessSteps, resultLine: slendernessResultLine, passed: el.slenderness_ratio <= slendernessLimit },
-  ];
-}
-
-function generateMockElements(): CodeCheckElement[] {
-  const sections = ['HW400x400x13x21', 'HM390x300x10x16'];
-  const els: CodeCheckElement[] = [];
-  let id = 1;
-  for (let story = 1; story <= 4; story++) {
-    for (let c = 0; c < 16; c++) {
-      const r = 0.15 + Math.random() * 0.85;
-      const el: CodeCheckElement = {
-        id: id++, type: 'column', section: sections[0], story,
-        node_i: id * 2, node_j: id * 2 + 1,
-        stress_ratio: +r.toFixed(4),
-        stability_ratio: +(r * 0.85).toFixed(4),
-        deflection_ratio: +(r * 0.3).toFixed(4),
-        slenderness_ratio: +(Math.random() * 120).toFixed(1),
-        pass: r <= 1.0,
-      };
-      el.calcProcesses = generateCalcProcesses(el);
-      els.push(el);
-    }
-    for (let b = 0; b < 24; b++) {
-      const r = 0.2 + Math.random() * 0.85;
-      const el: CodeCheckElement = {
-        id: id++, type: 'beam', section: sections[1], story,
-        node_i: id * 2, node_j: id * 2 + 1,
-        stress_ratio: +r.toFixed(4),
-        stability_ratio: +(r * 0.82).toFixed(4),
-        deflection_ratio: +(r * 0.45).toFixed(4),
-        slenderness_ratio: +(Math.random() * 100).toFixed(1),
-        pass: r <= 1.0,
-      };
-      el.calcProcesses = generateCalcProcesses(el);
-      els.push(el);
-    }
-  }
-  return els;
-}
-
-const MOCK_ELEMENTS = generateMockElements();
+// Mock 数据逻辑已移至 utils/mockData.ts，此处仅保留懒加载引用
 
 // ── Main Component ───────────────────────────────────────────────
 
@@ -215,7 +70,7 @@ export default function ResultsPanel() {
 
   // ── Elements ────────────────────────────────────────────────────
   const elements: CodeCheckElement[] = useMemo(() => {
-    if (!codeCheckResults) return MOCK_ELEMENTS;
+    if (!codeCheckResults) return getMockElements();
     const data = codeCheckResults as Record<string, unknown>;
     if (data.elements && Array.isArray(data.elements) && data.elements.length > 0) {
       return (data.elements as Array<Record<string, unknown>>).map((el) => {
@@ -242,7 +97,7 @@ export default function ResultsPanel() {
         return mapped;
       });
     }
-    return MOCK_ELEMENTS;
+    return getMockElements();
   }, [codeCheckResults]);
 
   // ── Floors ─────────────────────────────────────────────────────
@@ -398,7 +253,7 @@ export default function ResultsPanel() {
             <div className="grid grid-cols-2 gap-x-6 gap-y-2.5 text-[11px]">
               <div className="flex justify-between items-center">
                 <span className="text-gray-500">应力比</span>
-                <span className="font-mono" style={{ color: stressColor(detailEl.stress_ratio, safeLimit, criticalLimit).dot }}>
+                <span className="font-mono" style={{ color: stressColor(detailEl.stress_ratio).dot }}>
                   {detailEl.stress_ratio.toFixed(4)}
                 </span>
               </div>
@@ -680,7 +535,7 @@ export default function ResultsPanel() {
           <tbody>
             {filtered.map(el => {
               const mr = getMaxRatio(el);
-              const sc = stressColor(mr, safeLimit, criticalLimit);
+              const sc = stressColor(mr);
               const isSelected = selectedRow === el.id;
               return (
                 <tr key={el.id}
@@ -741,7 +596,7 @@ export default function ResultsPanel() {
           </div>
           <div className="grid grid-cols-4 gap-x-3 gap-y-1 text-[11px]">
             <span className="text-gray-500">应力比</span>
-            <span className="text-right font-mono" style={{ color: stressColor(detailEl.stress_ratio, safeLimit, criticalLimit).dot }}>
+            <span className="text-right font-mono" style={{ color: stressColor(detailEl.stress_ratio).dot }}>
               {detailEl.stress_ratio.toFixed(4)}
             </span>
             <span className="text-gray-500">稳定比</span>

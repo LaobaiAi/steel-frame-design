@@ -51,6 +51,23 @@ export const api = {
   projectLoad: (file: string) =>
     request<{ status: string; data: Record<string, unknown> }>('/project/load', { file }),
 
+  /** 获取可用截面库和材料库（供表单下拉列表动态填充） */
+  getSections: () =>
+    request<{
+      sections: Record<string, Record<string, number>>;
+      materials: Record<string, Record<string, unknown>>;
+      column_sections: string[];
+      beam_sections: string[];
+      material_grades: string[];
+    }>('/sections'),
+
+  /** 获取应力比颜色映射定义（表格和 3D 渲染共用） */
+  getColormap: () =>
+    request<{
+      stops: { ratio: number; r: number; g: number; b: number; hex: string; label: string }[];
+      thresholds: { max_ratio: number; dot: string; bg: string; label: string }[];
+    }>('/colormap'),
+
   /**
    * 流式：LLM 对话（SSE）。
    * 通过 POST /api/llm/stream 获取 SSE 事件流。
