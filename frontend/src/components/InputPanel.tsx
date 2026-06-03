@@ -15,11 +15,10 @@ import { computeMockStats } from '../utils/mockData';
 // ── Shared: generate mock results from engineering params ────────
 
 function generateMockResults(store: ReturnType<typeof useStore.getState>, params: RunPipelineParams) {
-  const { totalNodes, totalElements, totalCols, totalBeams, failed, passed } = computeMockStats(params);
+  const { totalNodes, totalElements, failed, passed } = computeMockStats(params);
   const nx = params.grid_x.length;
   const ny = params.grid_y.length;
   const nz = params.num_stories;
-  const nCol = (nx + 1) * (ny + 1);
 
   const mockElements: Array<Record<string, unknown>> = [];
   let eid = 0;

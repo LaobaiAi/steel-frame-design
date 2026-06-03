@@ -2,7 +2,7 @@ import React, { useMemo, useState, useRef, useEffect, useCallback } from 'react'
 import { createPortal } from 'react-dom';
 import { useStore } from '../store/useStore';
 import { PieChart, CheckCircle, XCircle, AlertTriangle, Filter, ArrowUpDown, Minus, Plus, ChevronDown, ChevronRight, Download, CheckSquare } from 'lucide-react';
-import type { CodeCheckElement, CalcProcess, CalcStep } from '../types';
+import type { CodeCheckElement } from '../types';
 import { generateCalcProcesses, getMockElements } from '../utils/mockData';
 
 type TypeFilter = 'all' | 'column' | 'beam';

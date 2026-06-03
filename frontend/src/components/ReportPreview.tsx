@@ -25,9 +25,9 @@ export default function ReportPreview() {
 
   const check = (codeCheckResults ?? {}) as Record<string, unknown>;
   const summary = (check?.summary ?? {}) as Record<string, unknown>;
-  const elements = (check?.elements ?? []) as Array<Record<string, unknown>>;
+  const elements = useMemo(() => (check?.elements ?? []) as Array<Record<string, unknown>>, [check?.elements]);
   const analysis = (analysisResults ?? {}) as Record<string, unknown>;
-  const params = (engineeringParams ?? {}) as Record<string, unknown>;
+  const params = useMemo(() => (engineeringParams ?? {}) as Record<string, unknown>, [engineeringParams]);
 
   // ── 统一从 elements 计算 pass/fail，与 ResultsPanel 口径一致 ──
   const totalElements = elements.length || (summary.total_elements as number) || 0;

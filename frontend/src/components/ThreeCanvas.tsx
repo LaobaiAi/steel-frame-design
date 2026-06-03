@@ -174,10 +174,11 @@ function AnimatedBeam({ ni, nj, color, secH = 0.35, secB = 0.3, opacity = 1, emi
     if (animationType === 'drop') return new THREE.Vector3(mid.x, mid.y, mid.z + 18 + delay * 0.5);
     if (animationType === 'slide') return new THREE.Vector3(mid.x + 10, mid.y, mid.z);
     return mid.clone();
-  }, [animationType, ni.x, ni.y, ni.z, nj.x, nj.y, nj.z]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- ni/nj are THREE.Vector3, use primitives to avoid ref identity changes
+  }, [animationType, delay, ni.x, ni.y, ni.z, nj.x, nj.y, nj.z]);
 
-  const targetPos = useMemo(() => _v.copy(ni).add(nj).multiplyScalar(0.5).clone(), []);
-  const dir = useMemo(() => new THREE.Vector3().subVectors(nj, ni), []);
+  const targetPos = useMemo(() => _v.copy(ni).add(nj).multiplyScalar(0.5).clone(), [ni, nj]);
+  const dir = useMemo(() => new THREE.Vector3().subVectors(nj, ni), [ni, nj]);
   const len = dir.length();
   const quat = useMemo(() => {
     if (len < 0.01) return new THREE.Quaternion();
@@ -190,7 +191,7 @@ function AnimatedBeam({ ni, nj, color, secH = 0.35, secB = 0.3, opacity = 1, emi
     if (animationType === 'rise' && ref.current) {
       ref.current.scale.y = 0;
     }
-  }, []);
+  }, [animationType]);
 
   const beamGeom = useMemo(() => {
     if (len < 0.01) return null;
