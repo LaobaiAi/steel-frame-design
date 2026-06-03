@@ -214,13 +214,23 @@ def test_hub_auto_discover():
     assert hub.get_server_count() >= 5, f"Expected >=5 servers, got {hub.get_server_count()}"
     assert hub.get_tool_count() >= 5
 
-    # 验证核心工具可发现
-    for tool_name in ["generate_frame", "apply_loads", "run_analysis",
+    # 验证核心工具可发现（in_process 工具；run_analysis 为子进程工具，需显式注册）
+    for tool_name in ["generate_frame", "apply_loads",
                        "check_code", "generate_report"]:
         tool_def = hub.find_tool(tool_name)
         assert tool_def is not None, f"Tool '{tool_name}' not found in Hub"
         assert "name" in tool_def
         assert "description" in tool_def
+
+    # 子进程工具不会自动发现，需通过 register_subprocess 注册后验证路由
+    hub.register_subprocess({
+        "name": "fea_runner",
+        "command": sys.executable,
+        "args": ["-u", "-m", "servers.opensees_runner"],
+        "lazy": True,
+        "tools": ["run_analysis"],
+    })
+    assert hub.find_tool("run_analysis") is not None, "Subprocess tool 'run_analysis' should be routable after register_subprocess"
 
 
 def test_hub_call_tool():
@@ -275,6 +285,15 @@ def test_pipeline_through_hub():
     hub = Hub()
     pipeline = SteelFramePipeline(hub)
     hub.register(pipeline)
+
+    # 注册子进程求解器（run_analysis 为计算型 Server，不参与自动发现）
+    hub.register_subprocess({
+        "name": "fea_runner",
+        "command": sys.executable,
+        "args": ["-u", "-m", "servers.opensees_runner"],
+        "lazy": True,
+        "tools": ["run_analysis"],
+    })
 
     result = hub.call_tool("run_full_pipeline", {
         "grid_x": [6.0], "grid_y": [6.0],
