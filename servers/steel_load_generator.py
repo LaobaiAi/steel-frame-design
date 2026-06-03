@@ -126,46 +126,36 @@ class SteelLoadGenerator(CAIAOServer):
                     "restraints": [True, True, True, True, True, True]
                 })
 
-        # ── 荷载工况 1: 恒载 (Dead Load) ──────────────────────
+        # ── 荷载工况 1-2: 恒载 + 活载（合并遍历，避免重复计算从属宽度）──
         dead_loads = []
-        for el in elements:
-            if el["type"] == "beam":
-                node_i = next(n for n in nodes if n["id"] == el["node_i"])
-                node_j = next(n for n in nodes if n["id"] == el["node_j"])
-                z = node_i["z"]
-                if z > 0.001:
-                    # 恒载对屋面/楼面相同；按梁方向取对应从属宽度
-                    dx = abs(node_j["x"] - node_i["x"])
-                    dy = abs(node_j["y"] - node_i["y"])
-                    tributary = tributary_y if dx > dy else tributary_x
-                    ql = dead * tributary
-                    dead_loads.append({
-                        "element_id": el["id"],
-                        "type": "uniform",
-                        "direction": "global_z",
-                        "values": {"q": -ql}
-                    })
-
-        # ── 荷载工况 2: 活载 (Live Load) ──────────────────────
         live_loads = []
         for el in elements:
-            if el["type"] == "beam":
-                node_el = next(n for n in nodes if n["id"] == el["node_i"])
-                node_j = next(n for n in nodes if n["id"] == el["node_j"])
-                z = node_el["z"]
-                if z > 0.001:
-                    is_roof = abs(z - max_z) < 0.01
-                    ll = roof_live if is_roof else live
-                    dx = abs(node_j["x"] - node_el["x"])
-                    dy = abs(node_j["y"] - node_el["y"])
-                    tributary = tributary_y if dx > dy else tributary_x
-                    ql = ll * tributary
-                    live_loads.append({
-                        "element_id": el["id"],
-                        "type": "uniform",
-                        "direction": "global_z",
-                        "values": {"q": -ql}
-                    })
+            if el["type"] != "beam":
+                continue
+            node_i = next(n for n in nodes if n["id"] == el["node_i"])
+            node_j = next(n for n in nodes if n["id"] == el["node_j"])
+            z = node_i["z"]
+            if z < 0.001:
+                continue
+            dx = abs(node_j["x"] - node_i["x"])
+            dy = abs(node_j["y"] - node_i["y"])
+            tributary = tributary_y if dx > dy else tributary_x
+            # 恒载（屋面/楼面相同）
+            dead_loads.append({
+                "element_id": el["id"],
+                "type": "uniform",
+                "direction": "global_z",
+                "values": {"q": -dead * tributary}
+            })
+            # 活载（屋面与楼面取值不同）
+            is_roof = abs(z - max_z) < 0.01
+            ll = roof_live if is_roof else live
+            live_loads.append({
+                "element_id": el["id"],
+                "type": "uniform",
+                "direction": "global_z",
+                "values": {"q": -ll * tributary}
+            })
 
         load_cases = [
             {"name": "Dead", "description": "恒荷载", "loads": dead_loads},
