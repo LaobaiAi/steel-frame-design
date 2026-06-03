@@ -57,19 +57,17 @@ class SteelFramePipeline(CAIAOServer):
         """统一的工具调用入口：优先 Hub 调度，回退直接调用。"""
         if self._hub is not None:
             return self._hub.call_tool(tool_name, input_data)
-        # 回退：直接调用对应的原子 Server
-        server_map = {
-            "generate_frame": ("_generator", "generate_frame"),
-            "apply_loads": ("_loader", "apply_loads"),
-            "run_analysis": ("_runner", "run_analysis"),
-            "check_code": ("_checker", "check_code"),
-            "generate_report": ("_reporter", "generate_report"),
+        # 回退：直接调用对应的原子 Server（tool_name 即方法名，attr 名由前缀约定）
+        attr_map = {
+            "generate_frame": "_generator",
+            "apply_loads": "_loader",
+            "run_analysis": "_runner",
+            "check_code": "_checker",
+            "generate_report": "_reporter",
         }
-        if tool_name in server_map:
-            attr, actual_tool = server_map[tool_name]
-            server = getattr(self, attr, None)
-            if server:
-                return server.call_tool(actual_tool, input_data)
+        server = getattr(self, attr_map.get(tool_name, ""), None)
+        if server:
+            return server.call_tool(tool_name, input_data)
         return {"error": f"Tool '{tool_name}' not available"}
 
     @tool(
