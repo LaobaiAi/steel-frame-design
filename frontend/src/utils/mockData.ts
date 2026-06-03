@@ -173,15 +173,7 @@ export function getMockElements(): CodeCheckElement[] {
 
 // ── 自动演示模式 mock 结果生成 ───────────────────────────────────
 
-export interface MockPipelineParams {
-  grid_x: number[];
-  grid_y: number[];
-  num_stories: number;
-  story_heights: number[];
-  [key: string]: unknown;
-}
-
-export function computeMockStats(params: MockPipelineParams) {
+export function computeMockStats(params: { grid_x: number[]; grid_y: number[]; num_stories: number }) {
   const nx = params.grid_x.length;
   const ny = params.grid_y.length;
   const nz = params.num_stories;
