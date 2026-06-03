@@ -502,6 +502,28 @@ async def llm_stream(data: dict):
     return StreamingResponse(event_stream(), media_type="text/event-stream")
 
 
+@app.get("/api/sections")
+async def get_sections():
+    """返回可用截面库和材料库（供前端下拉列表动态获取）。"""
+    from servers.defaults import BUILTIN_SECTIONS, BUILTIN_MATERIALS
+    return {
+        "sections": {name: {"A": s["A"], "Ix": s["Ix"], "Iy": s["Iy"],
+                             "Wx": s["Wx"], "Wy": s["Wy"], "ix": s["ix"], "iy": s["iy"]}
+                      for name, s in BUILTIN_SECTIONS.items()},
+        "materials": BUILTIN_MATERIALS,
+        "column_sections": [k for k in BUILTIN_SECTIONS if k.startswith("HW")],
+        "beam_sections": [k for k in BUILTIN_SECTIONS if k.startswith("HM")],
+        "material_grades": list(BUILTIN_MATERIALS.keys()),
+    }
+
+
+@app.get("/api/colormap")
+async def get_colormap():
+    """返回应力比颜色映射定义（前端表格和 3D 渲染共用）。"""
+    from servers.defaults import COLORMAP_STOPS, COLORMAP_THRESHOLDS
+    return {"stops": COLORMAP_STOPS, "thresholds": COLORMAP_THRESHOLDS}
+
+
 @app.get("/api/tools")
 async def list_tools():
     if hub is None:
@@ -531,30 +553,23 @@ else:
     print("[WebAPI] 请先构建前端: cd frontend && npm run build")
 
 
-def _cleanup_port(port: int):
-    """启动前清理占用指定端口的旧进程（Windows）。"""
-    import subprocess
-    import time
+def _check_port(port: int) -> bool:
+    """检查端口是否被占用（跨平台，仅检测不杀进程）。"""
+    import socket
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    sock.settimeout(0.5)
     try:
-        out = subprocess.check_output(
-            f'netstat -ano | findstr LISTENING | findstr ":{port}"',
-            shell=True, text=True, stderr=subprocess.DEVNULL,
-        )
-        for line in out.strip().splitlines():
-            parts = line.strip().split()
-            pid = parts[-1] if parts else ""
-            if pid.isdigit():
-                subprocess.run(f'taskkill /F /PID {pid}', shell=True, capture_output=True)
-                print(f"[WebAPI] 已清理端口 {port} 上的旧进程 (PID {pid})")
-                time.sleep(0.5)
-    except subprocess.CalledProcessError:
-        pass  # 没有进程占用该端口
-    except Exception as e:
-        print(f"[WebAPI] 清理端口 {port} 时出错: {e}")
+        result = sock.connect_ex(('127.0.0.1', port))
+        sock.close()
+        return result == 0
+    except Exception:
+        return False
 
 
 if __name__ == "__main__":
     import uvicorn
-    _cleanup_port(8000)
+    if _check_port(8000):
+        print("[WebAPI] 警告: 端口 8000 已被占用，请手动释放后重试")
+        print("[WebAPI] 查找占用进程: netstat -ano | findstr :8000 (Windows) / lsof -i :8000 (macOS/Linux)")
     print("[WebAPI] 启动 FastAPI 服务 http://0.0.0.0:8000")
     uvicorn.run(app, host="0.0.0.0", port=8000, log_level="info")
