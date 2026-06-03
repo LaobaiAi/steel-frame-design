@@ -1,16 +1,5 @@
 # 快速启动
 
-## 启动前准备（可选）
-
-启动前确保端口 3000 未被占用：
-
-```bash
-PID=$(netstat -ano 2>/dev/null | findstr ":3000 " | findstr LISTEN | awk '{print $NF}')
-[ -n "$PID" ] && taskkill /F /PID $PID 2>/dev/null || true
-```
-
-> 查找占用端口 3000 的进程并强制终止，保证 Vite 始终使用 3000 端口。
-
 ## 启动方式
 
 ### 1. 后端 (FastAPI)
@@ -27,7 +16,7 @@ python servers/web_api_server.py
 cd frontend && npm run dev
 ```
 
-默认端口: **3000**（被占用时自动递增）
+默认端口: **3000**（`strictPort: true`，端口被占用时 Vite 会报错退出，手动释放后重试）
 
 ### 3. CLI 模式（无需前端）
 

@@ -15,17 +15,14 @@
 ### 简要启动命令
 
 ```bash
-# 确保端口 3000 可用（杀掉占用的进程）
-PID=$(netstat -ano 2>/dev/null | findstr ":3000 " | findstr LISTEN | awk '{print $NF}')
-[ -n "$PID" ] && taskkill /F /PID $PID 2>/dev/null || true
-sleep 1
-
-# 后端
+# 后端（端口 8000）
 python servers/web_api_server.py
 
-# 前端（另一个终端）
+# 前端（另一个终端，端口 3000）
 cd frontend && npm run dev
 ```
+
+> 前端 `vite.config.ts` 已配置 `strictPort: true`，端口 3000 被占用时 Vite 会报错提示，手动释放端口后重试即可。
 
 ### CLI 模式
 
