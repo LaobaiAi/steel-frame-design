@@ -22,12 +22,6 @@
 </p>
 
 <p align="center">
-  <a href="https://laobaiai.github.io/steel-frame-design/">
-    <img src="https://img.shields.io/badge/🌐%20查看官网-Landing%20Page-success?style=for-the-badge&logo=github" alt="Website">
-  </a>
-</p>
-
-<p align="center">
   <a href="#快速开始">快速开始</a> ·
   <a href="#核心特性">特性</a> ·
   <a href="#演示">演示</a> ·
