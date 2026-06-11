@@ -298,7 +298,15 @@ function EngineeringForm() {
   // 截面库和材料库（从后端 API 动态加载）
   const [sectionOptions, setSectionOptions] = useState<{
     column: string[]; beam: string[]; materials: string[];
-  }>({ column: ['HW400x400x13x21'], beam: ['HM390x300x10x16'], materials: ['Q355'] });
+  }>({
+    column: ['HW150x150x7x10', 'HW200x200x8x12', 'HW250x250x9x14',
+             'HW300x300x10x15', 'HW350x350x12x19', 'HW400x400x13x21',
+             'HW450x450x14x23', 'HW500x500x16x25'],
+    beam: ['HM200x150x6x9', 'HM244x175x7x11', 'HM294x200x8x12',
+           'HM340x250x9x14', 'HM390x300x10x16', 'HM440x300x11x18',
+           'HM500x300x11x18', 'HM550x300x12x20', 'HM600x300x12x22'],
+    materials: ['Q235', 'Q355', 'Q390', 'Q420'],
+  });
   useEffect(() => {
     api.getSections().then(data => {
       setSectionOptions({
