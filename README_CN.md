@@ -18,6 +18,7 @@
   <img src="https://img.shields.io/badge/CAIAO-Server%20Native-orange" alt="CAIAO">
   <img src="https://img.shields.io/badge/docker-ready-2496ED?logo=docker" alt="Docker">
   <img src="https://img.shields.io/badge/CI-passing-brightgreen?logo=githubactions" alt="CI">
+  <img src="https://img.shields.io/badge/Pages-Cloudflare-F38020?logo=cloudflare" alt="Cloudflare Pages">
   <img src="https://img.shields.io/badge/license-MIT-green" alt="License">
 </p>
 
@@ -26,6 +27,7 @@
   <a href="#核心特性">特性</a> ·
   <a href="#演示">演示</a> ·
   <a href="#架构">架构</a> ·
+  <a href="https://steel-frame-design.pages.dev" target="_blank">官网</a> ·
   <a href="./README.md">English</a>
 </p>
 
@@ -39,6 +41,7 @@
 
 | 方式 | 怎么做 |
 |---|---|
+| **🌐 官网**（零门槛） | 打开 https://steel-frame-design.pages.dev 浏览项目介绍与截图 |
 | **🐳 Docker**（推荐） | `docker compose up -d` → 打开 http://localhost:8000 |
 | **⌨️ CLI** | `python cli/main.py run --quick` |
 
