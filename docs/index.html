@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="XuanwuAI Steel Frame Design — AI-powered parametric steel frame design pipeline. YAML/LLM to GB50017 code check and 3D visualization.">
+  <meta name="keywords" content="steel frame, structural engineering, GB50017, FEA, CAIAO, AI, steel design">
+  <meta property="og:title" content="XuanwuAI Steel Frame Design">
+  <meta property="og:description" content="AI-powered parametric steel frame design pipeline">
+  <meta property="og:image" content="https://raw.githubusercontent.com/LaobaiAi/steel-frame-design/master/docs/assets/screenshot-hero.png">
+  <meta property="og:url" content="https://laobaiai.github.io/steel-frame-design/">
+  <title>XuanwuAI Steel Frame Design</title>
+  <link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+
+  <!-- ── Navbar ── -->
+  <nav class="navbar">
+    <div class="container nav-inner">
+      <span class="logo">XuanwuAI</span>
+      <div class="nav-links">
+        <a href="#features">Features</a>
+        <a href="#architecture">Architecture</a>
+        <a href="#gallery">Gallery</a>
+        <a href="https://codespaces.new/LaobaiAi/steel-frame-design" target="_blank" class="nav-cs">🚀 在线运行</a>
+        <a href="https://github.com/LaobaiAi/steel-frame-design" target="_blank" class="nav-gh">GitHub</a>
+      </div>
+    </div>
+  </nav>
+
+  <!-- ── Hero ── -->
+  <section class="hero">
+    <div class="container hero-inner">
+      <div class="hero-badge">Abyssal Computation · 渊默之算</div>
+      <h1 class="hero-title">XuanwuAI <span class="text-cyan">Steel Frame Design</span></h1>
+      <p class="hero-subtitle">AI-powered parametric steel frame design pipeline</p>
+      <div class="hero-flow">
+        <span>YAML / LLM</span><span class="arrow">→</span><span>Frame Gen</span><span class="arrow">→</span><span>Loads</span><span class="arrow">→</span>
+        <span>FEA</span><span class="arrow">→</span><span>GB50017</span><span class="arrow">→</span><span>Report</span><span class="arrow">→</span><span class="highlight">3D Viz</span>
+      </div>
+      <div class="hero-actions">
+        <a href="https://codespaces.new/LaobaiAi/steel-frame-design" class="btn btn-primary">🚀 从这里开始 — 浏览器中直接运行</a>
+        <a href="https://github.com/LaobaiAi/steel-frame-design" class="btn btn-secondary">查看源码</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Badge Bar ── -->
+  <section class="badge-bar">
+    <div class="container">
+      <img src="https://img.shields.io/badge/python-3.10+-blue?logo=python" alt="Python">
+      <img src="https://img.shields.io/badge/GB50017-compliant-red" alt="GB50017">
+      <img src="https://img.shields.io/badge/CAIAO-Server%20Native-orange" alt="CAIAO">
+      <img src="https://img.shields.io/badge/docker-ready-2496ED?logo=docker" alt="Docker">
+      <img src="https://img.shields.io/badge/CI-passing-brightgreen?logo=githubactions" alt="CI">
+      <img src="https://img.shields.io/badge/license-MIT-green" alt="License">
+    </div>
+  </section>
+
+  <!-- ── Features ── -->
+  <section id="features" class="section">
+    <div class="container">
+      <h2 class="section-title">Core Features</h2>
+      <div class="features-grid">
+        <div class="feature-card">
+          <div class="feature-icon">⚡</div>
+          <h3>One-Command Pipeline</h3>
+          <p>From YAML parameters or natural language to a complete structural analysis report — one command, no GUI required.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">📐</div>
+          <h3>Matrix Displacement Method</h3>
+          <p>Built-in 3D beam-element stiffness solver with zero compilation. Supports dead, live, wind, and seismic loads.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">✅</div>
+          <h3>GB50017 Code Check</h3>
+          <p>Per-element strength, stability, slenderness, and deflection verification against Chinese steel design standard.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">📊</div>
+          <h3>HTML Report</h3>
+          <p>Jinja2-rendered professional reports with model overview, check summary tables, and key structural metrics.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">🧩</div>
+          <h3>CAIAO Atomic Architecture</h3>
+          <p>Each step runs as an independent, LLM-callable Server. Plug-and-play extensibility — add a new code standard in one file.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">🤖</div>
+          <h3>AI-Ready</h3>
+          <p>Complete @tool metadata and JSON Schema validation. LLM agents can call any Server directly. MCP-ready stdio loop.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Architecture ── -->
+  <section id="architecture" class="section section-alt">
+    <div class="container">
+      <h2 class="section-title">Pipeline Architecture</h2>
+      <div class="arch-flow">
+        <div class="arch-step"><span>Frame Generator</span></div>
+        <div class="arch-arrow">→</div>
+        <div class="arch-step"><span>Load Generator</span></div>
+        <div class="arch-arrow">→</div>
+        <div class="arch-step"><span>FEA Runner</span></div>
+        <div class="arch-arrow">→</div>
+        <div class="arch-step"><span>GB50017 Check</span></div>
+        <div class="arch-arrow">→</div>
+        <div class="arch-step"><span>Report Generator</span></div>
+        <div class="arch-arrow">→</div>
+        <div class="arch-step arch-last"><span>3D Export</span></div>
+      </div>
+      <p class="arch-desc">All orchestrated by the <strong>CAIAO Hub</strong> — lightweight Server registry with subprocess isolation. Exposed via <strong>FastAPI Web API</strong> and consumed by the <strong>React+Three.js frontend</strong>.</p>
+    </div>
+  </section>
+
+  <!-- ── Gallery ── -->
+  <section id="gallery" class="section">
+    <div class="container">
+      <h2 class="section-title">Screenshots</h2>
+      <div class="gallery-grid">
+        <div class="gallery-item">
+          <img src="assets/screenshot-3d-viewer.png" alt="3D Viewer" loading="lazy">
+          <p>Interactive 3D Model Viewer</p>
+        </div>
+        <div class="gallery-item">
+          <img src="assets/screenshot-storyboard.png" alt="Storyboard" loading="lazy">
+          <p>8-Step Design Storyboard</p>
+        </div>
+        <div class="gallery-item">
+          <img src="assets/screenshot-loads.png" alt="Load Visualization" loading="lazy">
+          <p>Load Visualization</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Quick Start ── -->
+  <section id="quickstart" class="section section-alt">
+    <div class="container">
+      <h2 class="section-title">Quick Start</h2>
+      <div class="qs-grid">
+        <div class="qs-card">
+          <h3>☁️ Codespaces (Cloud)</h3>
+          <p>No local setup needed — click and run in your browser.</p>
+          <a href="https://codespaces.new/LaobaiAi/steel-frame-design" class="btn btn-codespaces" style="display:inline-flex;margin-top:12px">Open in Codespaces</a>
+          <pre style="margin-top:16px"><code>pip install -r requirements.txt
+cd frontend && npm install
+python servers/web_api_server.py
+<span class="comment"># New terminal:</span>
+cd frontend && npm run dev</code></pre>
+        </div>
+        <div class="qs-card">
+          <h3>🐳 Docker (Local)</h3>
+          <pre><code>git clone https://github.com/LaobaiAi/steel-frame-design.git
+cd steel-frame-design
+docker compose up -d
+<span class="comment"># Open http://localhost:8000</span></code></pre>
+        </div>
+        <div class="qs-card">
+          <h3>🐍 Python + Node</h3>
+          <pre><code>pip install -r requirements.txt
+cd frontend && npm install
+python servers/web_api_server.py  <span class="comment"># Terminal 1</span>
+cd frontend && npm run dev         <span class="comment"># Terminal 2</span>
+<span class="comment"># Open http://localhost:3000</span></code></pre>
+        </div>
+        <div class="qs-card">
+          <h3>⌨️ CLI Mode</h3>
+          <pre><code>python cli/main.py run --quick</code></pre>
+        </div>
+      </div>
+      <p class="qs-more">Full documentation available in the <a href="https://github.com/LaobaiAi/steel-frame-design#readme">README</a>.</p>
+    </div>
+  </section>
+
+  <!-- ── Footer ── -->
+  <footer class="footer">
+    <div class="container footer-inner">
+      <div class="footer-left">
+        <span class="footer-brand">XuanwuAI</span>
+        <span class="footer-desc">Abyssal Computation</span>
+      </div>
+      <div class="footer-right">
+        <a href="https://github.com/LaobaiAi/steel-frame-design" target="_blank">GitHub</a>
+        <span class="footer-sep">·</span>
+        <a href="./README_CN.md">中文</a>
+        <span class="footer-sep">·</span>
+        <span>MIT License © 2026</span>
+      </div>
+    </div>
+  </footer>
+
+</body>
+</html>
