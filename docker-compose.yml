@@ -1,0 +1,12 @@
+services:
+  steel-frame-design:
+    build: .
+    container_name: xuanwuai-steel-frame
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./output:/app/output
+      - ./projects:/app/projects
+    environment:
+      - PYTHONUNBUFFERED=1
+    restart: unless-stopped
