@@ -568,8 +568,9 @@ def _check_port(port: int) -> bool:
 
 if __name__ == "__main__":
     import uvicorn
-    if _check_port(8000):
-        print("[WebAPI] 警告: 端口 8000 已被占用，请手动释放后重试")
-        print("[WebAPI] 查找占用进程: netstat -ano | findstr :8000 (Windows) / lsof -i :8000 (macOS/Linux)")
-    print("[WebAPI] 启动 FastAPI 服务 http://0.0.0.0:8000")
-    uvicorn.run(app, host="0.0.0.0", port=8000, log_level="info")
+    port = int(os.getenv("PORT", 8000))
+    if _check_port(port):
+        print(f"[WebAPI] 警告: 端口 {port} 已被占用，请手动释放后重试")
+        print(f"[WebAPI] 查找占用进程: netstat -ano | findstr :{port} (Windows) / lsof -i :{port} (macOS/Linux)")
+    print(f"[WebAPI] 启动 FastAPI 服务 http://0.0.0.0:{port}")
+    uvicorn.run(app, host="0.0.0.0", port=port, log_level="info")
