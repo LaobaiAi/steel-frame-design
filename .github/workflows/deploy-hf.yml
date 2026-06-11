@@ -17,4 +17,4 @@ jobs:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
           git remote add huggingface https://user:${HF_TOKEN}@huggingface.co/spaces/LaobaiAi/steel-frame-design
-          git push huggingface master --force
+          git push huggingface master:main --force
