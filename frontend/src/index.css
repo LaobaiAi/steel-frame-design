@@ -150,6 +150,11 @@
   background: rgba(0,212,255,0.03);
   box-shadow: 0 0 12px rgba(0,212,255,0.08);
 }
+/* 下拉选项列表 — 暗色主题下使用深色文字和白色背景，防止文字不可见 */
+.floating-label-group select option {
+  color: #1a1a2e;
+  background: #ffffff;
+}
 .floating-label-group input.input-error {
   border-color: rgba(239,68,68,0.5);
 }
