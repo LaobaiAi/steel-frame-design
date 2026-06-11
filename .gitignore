@@ -30,7 +30,7 @@ projects/
 memory/
 
 # Node / npm
-package-lock.json
+# package-lock.json intentionally tracked for deterministic CI/Docker builds
 
 # Build
 steel_frame_app.spec
