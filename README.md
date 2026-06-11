@@ -22,8 +22,8 @@
 </p>
 
 <p align="center">
-  <a href="https://codespaces.new/LaobaiAi/steel-frame-design">
-    <img src="https://img.shields.io/badge/🚀%20从这里开始-在线运行-1f8838?style=for-the-badge&logo=github" alt="Open in Codespaces">
+  <a href="https://laobaiai.github.io/steel-frame-design/">
+    <img src="https://img.shields.io/badge/🌐%20查看官网-Landing%20Page-success?style=for-the-badge&logo=github" alt="Website">
   </a>
 </p>
 
@@ -45,8 +45,7 @@
 
 | 方式 | 怎么做 |
 |---|---|
-| **☁️ 在线体验**（推荐） | 点击上方绿色按钮 → 等 1 分钟 → 浏览器自动打开 |
-| **🐳 Docker** | `docker compose up` → 打开 http://localhost:8000 |
+| **🐳 Docker**（推荐） | `docker compose up -d` → 打开 http://localhost:8000 |
 | **⌨️ CLI** | `python cli/main.py run --quick` |
 
 ---
