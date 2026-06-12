@@ -115,6 +115,24 @@ jobs:
           npm ci
           npm run build
 
+      - name: Create Space (if missing)
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          pip install huggingface-hub -q
+          python3 -c "
+import os
+from huggingface_hub import HfApi
+api = HfApi(token=os.environ['HF_TOKEN'])
+try:
+    api.space_info('LaobaiAi/steel-frame-design')
+    print('Space exists')
+except Exception:
+    print('Creating Space...')
+    api.create_repo(repo_id='LaobaiAi/steel-frame-design', repo_type='space', space_sdk='docker', license='mit')
+    print('Space created')
+"
+
       - name: Upload to HF Spaces
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
