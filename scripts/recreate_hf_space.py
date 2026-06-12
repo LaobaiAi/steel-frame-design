@@ -1,63 +1,79 @@
 """Delete and recreate Hugging Face Space from scratch."""
 import os
 import sys
+import time
 from huggingface_hub import HfApi, upload_folder
 
 token = os.environ.get("HF_TOKEN", "")
+print(f"Token: {'set' if token else 'NOT SET'}")
 if not token:
-    sys.exit("HF_TOKEN not set")
+    sys.exit(1)
 
 api = HfApi(token=token)
 
-# Step 1: Delete existing Space
+# Delete existing Space
 try:
+    info = api.space_info("LaobaiAi/steel-frame-design")
+    print(f"Existing Space stage: {info.runtime.stage if info.runtime else '?'}")
     api.delete_repo(repo_id="LaobaiAi/steel-frame-design", repo_type="space")
     print("Deleted existing Space")
+    time.sleep(10)
 except Exception as e:
-    print(f"Delete skipped (might not exist): {e}")
+    print(f"Delete: {type(e).__name__}: {e}")
 
-# Step 2: Create new Space
-api.create_repo(
-    repo_id="LaobaiAi/steel-frame-design",
-    repo_type="space",
-    title="XuanwuAI Steel Frame Design",
-    space_sdk="docker",
-    license="mit",
-)
-print("Created new Space")
+# Create new Space
+print("Creating new Space...")
+try:
+    api.create_repo(
+        repo_id="LaobaiAi/steel-frame-design",
+        repo_type="space",
+        space_sdk="docker",
+        license="mit",
+    )
+    print("Created new Space")
+    time.sleep(5)
+except Exception as e:
+    print(f"Create failed: {type(e).__name__}: {e}")
+    sys.exit(1)
 
-# Step 3: Upload project files
-upload_folder(
-    repo_id="LaobaiAi/steel-frame-design",
-    repo_type="space",
-    folder_path=".",
-    ignore_patterns=[
-        ".git*", "__pycache__", "*.pyc",
-        "output", "projects", ".venv", "venv",
-        "node_modules", "frontend/node_modules",
-    ],
-    commit_message="Initial deploy from GitHub",
-)
-print("Upload complete!")
+# Upload project files
+print("Uploading files...")
+try:
+    upload_folder(
+        repo_id="LaobaiAi/steel-frame-design",
+        repo_type="space",
+        folder_path=".",
+        ignore_patterns=[
+            ".git*", "__pycache__", "*.pyc",
+            "output", "projects", ".venv", "venv",
+            "node_modules", "frontend/node_modules",
+        ],
+        commit_message="Auto-deploy from GitHub",
+    )
+    print("Upload complete!")
+except Exception as e:
+    print(f"Upload failed: {type(e).__name__}: {e}")
+    sys.exit(1)
 
-# Step 4: Wait for build
+# Wait for build
 print("\nWaiting for build...")
-for i in range(60):
+for i in range(120):
     try:
         info = api.space_info("LaobaiAi/steel-frame-design")
-        stage = info.runtime.stage if info.runtime else "UNKNOWN"
-        err = info.runtime.errorMessage if info.runtime and info.runtime.errorMessage else ""
+        runtime = info.runtime
+        stage = runtime.stage if runtime else "UNKNOWN"
+        err = runtime.errorMessage if runtime and runtime.errorMessage else ""
         print(f"[{i+1}] stage={stage} error={err}")
         if stage == "RUNNING":
             print("Space is running!")
+            print("URL: https://LaobaiAi-steel-frame-design.hf.space")
             break
         if stage in ("ERROR", "STOPPED"):
             print(f"Build failed: {err}")
             sys.exit(1)
     except Exception as e:
-        print(f"[{i+1}] check failed: {e}")
-    import time
+        print(f"[{i+1}] check error: {type(e).__name__}: {e}")
     time.sleep(15)
 else:
-    print("Timeout waiting for build")
+    print("Timeout")
     sys.exit(1)
