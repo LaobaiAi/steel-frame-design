@@ -1,9 +1,9 @@
 name: Deploy to Hugging Face Spaces
 
-on:
+"on":
   push:
     branches: [master]
-  workflow_dispatch: ~
+  workflow_dispatch: {}
 
 jobs:
   deploy:
