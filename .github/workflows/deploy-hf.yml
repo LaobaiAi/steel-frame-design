@@ -10,11 +10,38 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Push to Hugging Face Spaces
+      - name: Setup Python
+        run: pip install huggingface-hub
+
+      - name: Upload to Hugging Face
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
-          git remote add hf https://user:${HF_TOKEN}@huggingface.co/spaces/LaobaiAi/steel-frame-design
-          git fetch hf
-          git push hf master:main --force 2>&1
-          echo "推送结果: $?"
+          python -c "
+import os
+from huggingface_hub import HfApi, upload_folder
+
+token = os.environ['HF_TOKEN']
+api = HfApi(token=token)
+
+# 删除 Space 上的旧文件，上传新文件
+api.delete_repo_files(
+    repo_id='LaobaiAi/steel-frame-design',
+    repo_type='space',
+    commit_message='cleanup before deploy',
+)
+
+upload_folder(
+    repo_id='LaobaiAi/steel-frame-design',
+    repo_type='space',
+    folder_path='.',
+    ignore_patterns=[
+        '.git*', '__pycache__', '*.pyc',
+        'output', 'projects', '.venv', 'venv',
+        'node_modules',
+    ],
+    commit_message='Auto-deploy from GitHub',
+)
+
+print('Deploy to Hugging Face complete!')
+"
