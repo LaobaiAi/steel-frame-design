@@ -1,26 +1,12 @@
-# Single stage build for HF Spaces compatibility
-FROM python:3.11-slim-bookworm
+# Lightweight Dockerfile for HF Spaces
+# Frontend is pre-built in CI, only Python runtime needed
+FROM python:3.11-slim
 
 WORKDIR /app
 
-# Install Node.js for frontend build
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    curl ca-certificates && \
-    curl -fsSL https://deb.nodesource.com/setup_22.x | bash - && \
-    apt-get install -y nodejs && \
-    apt-get clean && rm -rf /var/lib/apt/lists/*
-
-# Copy and build frontend
-COPY frontend/package*.json frontend/
-RUN cd frontend && npm ci
-COPY frontend/ frontend/
-RUN cd frontend && npm run build
-
-# Python backend
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy app code
 COPY servers/ servers/
 COPY cli/ cli/
 COPY schemas/ schemas/
@@ -29,7 +15,9 @@ COPY examples/ examples/
 COPY caiao_hub.py .
 COPY pyproject.toml .
 
-# Runtime directories
+# Pre-built frontend (from CI)
+COPY frontend/dist/ frontend/dist/
+
 RUN mkdir -p output projects
 
 EXPOSE 7860

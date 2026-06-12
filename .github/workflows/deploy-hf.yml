@@ -11,7 +11,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install dependencies
+      - name: Build frontend
+        run: |
+          cd frontend
+          npm ci
+          npm run build
+
+      - name: Install huggingface-hub
         run: pip install huggingface-hub -q
 
       - name: Upload to Hugging Face
