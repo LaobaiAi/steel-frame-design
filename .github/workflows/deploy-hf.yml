@@ -28,19 +28,18 @@ jobs:
       - name: Wait for build
         run: |
           for i in $(seq 1 30); do
-            STATUS=$(curl -s https://huggingface.co/api/spaces/LaobaiAi/steel-frame-design \
-              | python3 -c "import sys,json; d=json.load(sys.stdin); r=d.get('runtime',{}); print(r.get('stage','?'))" 2>/dev/null)
-            echo "Attempt $i: $STATUS"
-            if [ "$STATUS" = "RUNNING" ] || [ "$STATUS" = "RUNNING_BUILDING" ]; then
+            RESP=$(curl -s https://huggingface.co/api/spaces/LaobaiAi/steel-frame-design 2>&1)
+            STAGE=$(echo "$RESP" | python3 -c "import sys,json; d=json.load(sys.stdin); r=d.get('runtime',{}); print(r.get('stage','UNKNOWN'))" 2>/dev/null || echo "API_FAIL")
+            ERR=$(echo "$RESP" | python3 -c "import sys,json; d=json.load(sys.stdin); r=d.get('runtime',{}); print(r.get('errorMessage',''))" 2>/dev/null)
+            echo "Attempt $i: stage=$STAGE error=$ERR"
+            if [ "$STAGE" = "RUNNING" ] || [ "$STAGE" = "RUNNING_BUILDING" ]; then
               echo "Space is running!"
               echo "URL: https://LaobaiAi-steel-frame-design.hf.space"
               break
             fi
-            if [ "$STATUS" = "ERROR" ] || [ "$STATUS" = "STOPPED" ]; then
-              echo "Build failed!"
-              curl -s https://huggingface.co/api/spaces/LaobaiAi/steel-frame-design \
-                | python3 -c "import sys,json; d=json.load(sys.stdin); r=d.get('runtime',{}); print('Error:', r.get('errorMessage','Unknown'))"
-              break
+            if [ "$STAGE" = "ERROR" ] || [ "$STAGE" = "STOPPED" ]; then
+              echo "Build failed: $ERR"
+              exit 1
             fi
             sleep 30
           done
