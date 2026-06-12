@@ -115,6 +115,14 @@ jobs:
           npm ci
           npm run build
 
+      - name: Recreate Space (if commit contains [recreate])
+        if: contains(github.event.head_commit.message, '[recreate]')
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          pip install huggingface-hub -q
+          python scripts/recreate_hf_space.py
+
       - name: Upload to HF Spaces
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
