@@ -8,9 +8,51 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - name: Build frontend
         run: cd frontend && npm ci && npm run build
+
       - name: Recreate Space
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
-        run: pip install huggingface-hub -q && python scripts/recreate_hf_space.py
+        run: |
+          set -e
+          pip install huggingface-hub -q
+
+          echo "=== Checking Space ==="
+          python3 -c "
+import os
+from huggingface_hub import HfApi
+api = HfApi(token=os.environ['HF_TOKEN'])
+try:
+    info = api.space_info('LaobaiAi/steel-frame-design')
+    print('Space exists, deleting...')
+    api.delete_repo(repo_id='LaobaiAi/steel-frame-design', repo_type='space')
+    print('Deleted')
+    import time; time.sleep(10)
+except Exception as e:
+    print(f'No existing Space or error: {e}')
+" && echo "Delete done"
+
+          echo "=== Creating Space ==="
+          python3 -c "
+import os
+from huggingface_hub import HfApi
+api = HfApi(token=os.environ['HF_TOKEN'])
+api.create_repo(repo_id='LaobaiAi/steel-frame-design', repo_type='space', space_sdk='docker', license='mit')
+print('Space created!')
+" && echo "Create done"
+
+          echo "=== Uploading files ==="
+          python3 -c "
+import os
+from huggingface_hub import upload_folder
+upload_folder(
+    repo_id='LaobaiAi/steel-frame-design',
+    repo_type='space',
+    folder_path='.',
+    ignore_patterns=['.git*', '__pycache__', '*.pyc', 'output', 'projects', '.venv', 'venv', 'node_modules', 'frontend/node_modules'],
+    commit_message='Initial deploy',
+)
+print('Upload done!')
+" && echo "Upload done"
