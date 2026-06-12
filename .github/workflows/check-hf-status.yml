@@ -1,6 +1,7 @@
 name: Check HF Space Status
 
-on: workflow_dispatch
+on:
+  workflow_dispatch:
 
 jobs:
   check:
@@ -15,5 +16,4 @@ r = d.get('runtime', {})
 print('Stage:', r.get('stage'))
 print('SDK:', d.get('sdk'))
 print('Error:', r.get('errorMessage', 'None'))
-print('Build logs URL:', d.get('buildLogUrl', 'None'))
 "
