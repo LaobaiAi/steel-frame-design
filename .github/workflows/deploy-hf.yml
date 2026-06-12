@@ -10,61 +10,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup Python
+      - name: Install dependencies
         run: pip install huggingface-hub -q
 
       - name: Upload to Hugging Face
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
-        run: |
-          python -c "
-import os, sys
-from huggingface_hub import HfApi, upload_folder
-
-token = os.environ.get('HF_TOKEN', '')
-print(f'HF_TOKEN exists: {bool(token)}')
-print(f'HF_TOKEN length: {len(token)}')
-
-api = HfApi(token=token)
-
-# 测试连接
-try:
-    info = api.repo_info('LaobaiAi/steel-frame-design', repo_type='space')
-    print(f'Repo exists: {info.id}')
-    print(f'Default branch: {info.default_branch}')
-except Exception as e:
-    print(f'Repo info failed: {type(e).__name__}: {e}')
-    sys.exit(1)
-
-# 上传单独一个文件测试
-try:
-    api.upload_file(
-        repo_id='LaobaiAi/steel-frame-design',
-        repo_type='space',
-        path_in_repo='test_upload.txt',
-        path_or_fileobj=b'test upload at ' + str(os.path.getmtime('.')).encode(),
-        commit_message='test upload',
-    )
-    print('Test file upload OK!')
-except Exception as e:
-    print(f'Test upload failed: {type(e).__name__}: {e}')
-    sys.exit(1)
-
-# 上传整个项目
-try:
-    upload_folder(
-        repo_id='LaobaiAi/steel-frame-design',
-        repo_type='space',
-        folder_path='.',
-        ignore_patterns=[
-            '.git*', '__pycache__', '*.pyc',
-            'output', 'projects', '.venv', 'venv',
-            'node_modules',
-        ],
-        commit_message='Deploy from GitHub',
-    )
-    print('Full upload complete!')
-except Exception as e:
-    print(f'Full upload failed: {type(e).__name__}: {e}')
-    sys.exit(1)
-"
+        run: python scripts/upload_to_hf.py
