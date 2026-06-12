@@ -45,7 +45,7 @@ sdk: docker
 
 | 方式 | 怎么做 |
 |---|---|
-| **🌐 官网**（零门槛） | 打开 https://steel-frame-design.pages.dev 浏览项目介绍与截图 |
+| **🌐 在线使用**（零门槛） | 打开 https://LaobaiAi-steel-frame-design.hf.space 直接使用 |
 | **🐳 Docker**（推荐） | `docker compose up -d` → 打开 http://localhost:8000 |
 | **⌨️ CLI** | `python cli/main.py run --quick` |
 
