@@ -1,0 +1,16 @@
+name: Recreate Hugging Face Space
+
+on:
+  workflow_dispatch:
+
+jobs:
+  recreate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build frontend
+        run: cd frontend && npm ci && npm run build
+      - name: Recreate Space
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: pip install huggingface-hub -q && python scripts/recreate_hf_space.py
