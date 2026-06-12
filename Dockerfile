@@ -2,6 +2,12 @@ FROM python:3.11-slim
 WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
-COPY . .
+COPY servers/ servers/
+COPY schemas/ schemas/
+COPY templates/ templates/
+COPY examples/ examples/
+COPY caiao_hub.py .
+COPY pyproject.toml .
+COPY frontend/dist/ frontend/dist/
 RUN mkdir -p output projects
 CMD python servers/web_api_server.py
