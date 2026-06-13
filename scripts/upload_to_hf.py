@@ -56,8 +56,8 @@ upload_folder(
 print("Upload complete!")
 
 # ---- Step 4: Wait for build to finish ----
-print("Waiting for HF Space build (polling up to 60 min)...")
-MAX_ATTEMPTS = 180
+print("Waiting for HF Space build (polling up to 120 min)...")
+MAX_ATTEMPTS = 360
 for i in range(1, MAX_ATTEMPTS + 1):
     try:
         info = api.space_info(REPO_ID)
