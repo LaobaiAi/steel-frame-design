@@ -19,13 +19,16 @@ try:
     print(f"Space exists (stage: {info.runtime.stage if info.runtime else 'N/A'})")
 except Exception:
     print("Space not found, creating...")
-    api.create_repo(
-        repo_id=REPO_ID,
-        repo_type="space",
-        space_sdk="docker",
-        license="mit",
-    )
-    print("Space created")
+    try:
+        api.create_repo(
+            repo_id=REPO_ID,
+            repo_type="space",
+            space_sdk="docker",
+        )
+        print("Space created")
+    except Exception as create_err:
+        print(f"Failed to create Space: {create_err}")
+        sys.exit(1)
 
 # Debug: list key files being uploaded
 for d in ['frontend/dist', 'frontend/dist/assets']:
