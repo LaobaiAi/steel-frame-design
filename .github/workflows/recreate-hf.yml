@@ -12,47 +12,18 @@ jobs:
       - name: Build frontend
         run: cd frontend && npm ci && npm run build
 
-      - name: Recreate Space
+      - name: Delete and recreate Space
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
-          set -e
           pip install huggingface-hub -q
+          python -c "import os; os.environ['HF_HUB_DISABLE_SYMLINKS_WARNING']='1'; from huggingface_hub import HfApi; api=HfApi(token=os.environ['HF_TOKEN']); api.delete_repo('LaobaiAi/steel-frame-design', repo_type='space'); print('Deleted')"
+          sleep 10
+          python -c "import os; os.environ['HF_HUB_DISABLE_SYMLINKS_WARNING']='1'; from huggingface_hub import HfApi; api=HfApi(token=os.environ['HF_TOKEN']); api.create_repo('LaobaiAi/steel-frame-design', repo_type='space', space_sdk='docker'); print('Created')"
 
-          echo "=== Checking Space ==="
-          python3 -c "
-import os
-from huggingface_hub import HfApi
-api = HfApi(token=os.environ['HF_TOKEN'])
-try:
-    info = api.space_info('LaobaiAi/steel-frame-design')
-    print('Space exists, deleting...')
-    api.delete_repo(repo_id='LaobaiAi/steel-frame-design', repo_type='space')
-    print('Deleted')
-    import time; time.sleep(10)
-except Exception as e:
-    print(f'No existing Space or error: {e}')
-" && echo "Delete done"
-
-          echo "=== Creating Space ==="
-          python3 -c "
-import os
-from huggingface_hub import HfApi
-api = HfApi(token=os.environ['HF_TOKEN'])
-api.create_repo(repo_id='LaobaiAi/steel-frame-design', repo_type='space', space_sdk='docker', license='mit')
-print('Space created!')
-" && echo "Create done"
-
-          echo "=== Uploading files ==="
-          python3 -c "
-import os
-from huggingface_hub import upload_folder
-upload_folder(
-    repo_id='LaobaiAi/steel-frame-design',
-    repo_type='space',
-    folder_path='.',
-    ignore_patterns=['.git*', '__pycache__', '*.pyc', 'output', 'projects', '.venv', 'venv', 'node_modules', 'frontend/node_modules'],
-    commit_message='Initial deploy',
-)
-print('Upload done!')
-" && echo "Upload done"
+      - name: Upload and wait for build
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          pip install huggingface-hub -q
+          python scripts/upload_to_hf.py

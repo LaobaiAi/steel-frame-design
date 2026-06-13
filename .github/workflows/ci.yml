@@ -115,39 +115,9 @@ jobs:
           npm ci
           npm run build
 
-      - name: Upload to HF Spaces
+      - name: Deploy to HF Space
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
           pip install huggingface-hub -q
           python scripts/upload_to_hf.py
-
-      - name: Wait for Build
-        env:
-          HF_TOKEN: ${{ secrets.HF_TOKEN }}
-        run: |
-          echo "Waiting for HF Space build..."
-          pip install huggingface-hub -q 2>/dev/null
-          for i in $(seq 1 180); do
-            STATUS=$(python3 -c "
-import os, json, urllib.request
-from huggingface_hub import HfApi
-api = HfApi(token=os.environ.get('HF_TOKEN',''))
-try:
-    info = api.space_info('LaobaiAi/steel-frame-design')
-    stage = info.runtime.stage if info.runtime else '?'
-    err = info.runtime.errorMessage if info.runtime and info.runtime.errorMessage else ''
-    print(f'{stage}|{err}')
-except Exception as e:
-    print(f'API_ERROR|{e}')
-" 2>&1)
-            STG=$(echo "$STATUS" | cut -d'|' -f1)
-            ERR=$(echo "$STATUS" | cut -d'|' -f2-)
-            echo "[$i] stage=$STG error=$ERR"
-            case "$STG" in
-              RUNNING) echo "Ready!"; exit 0 ;;
-              ERROR)   echo "Build failed: $ERR"; exit 1 ;;
-              *)       sleep 20 ;;
-            esac
-          done
-          echo "Timeout" && exit 1
