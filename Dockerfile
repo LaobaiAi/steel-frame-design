@@ -1,7 +1,1 @@
-FROM python:3.11
-WORKDIR /app
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
-COPY . .
-EXPOSE 7860
-CMD python servers/web_api_server.py
+FROM ghcr.io/LaobaiAi/steel-frame-design:latest
