@@ -70,11 +70,26 @@ for i in range(1, MAX_ATTEMPTS + 1):
                 sys.exit(0)
             if stage == "ERROR":
                 print(f"Build failed: {err}")
-                sys.exit(1)
+                # Try to restart the Space to trigger a fresh build
+                print("Attempting to restart Space...")
+                try:
+                    api.restart_space(REPO_ID)
+                    print("Restart triggered, will keep polling...")
+                except Exception as restart_err:
+                    print(f"Restart failed: {restart_err}")
+                # Don't exit - keep polling after restart
         else:
             print(f"  [{i}] stage=N/A (no runtime yet)")
     except Exception as e:
         print(f"  [{i}] API error: {e}")
+    # After many failures, try restarting to unstick the Space
+    if i == 60 or i == 120 or i == 240:
+        print(f"  Build taking long, attempting restart...")
+        try:
+            api.restart_space(REPO_ID)
+            print("  Restart triggered")
+        except Exception as restart_err:
+            print(f"  Restart failed: {restart_err}")
     time.sleep(20)
 
 print("Timeout waiting for build")
