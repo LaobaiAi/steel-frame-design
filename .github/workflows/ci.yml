@@ -121,13 +121,14 @@ jobs:
           npm run build
 
       - name: Build and push Docker image
+        env:
+          IMG: ${{ env.REGISTRY }}/${{ github.repository_owner }}/steel-frame-design
         run: |
-          docker build -f Dockerfile.build \
-            -t $REGISTRY/$IMAGE_NAME:${{ github.sha }} \
-            -t $REGISTRY/$IMAGE_NAME:latest .
+          IMG_LOWER=$(echo "$IMG" | tr '[:upper:]' '[:lower:]')
+          docker build -f Dockerfile.build -t $IMG_LOWER:${{ github.sha }} -t $IMG_LOWER:latest .
           echo "${{ secrets.GITHUB_TOKEN }}" | docker login $REGISTRY -u ${{ github.actor }} --password-stdin
-          docker push $REGISTRY/$IMAGE_NAME:${{ github.sha }}
-          docker push $REGISTRY/$IMAGE_NAME:latest
+          docker push $IMG_LOWER:${{ github.sha }}
+          docker push $IMG_LOWER:latest
 
       - name: Deploy to HF Space
         env:

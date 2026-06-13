@@ -1,1 +1,1 @@
-FROM ghcr.io/LaobaiAi/steel-frame-design:latest
+FROM ghcr.io/laobaiai/steel-frame-design:latest
