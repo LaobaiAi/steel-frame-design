@@ -100,24 +100,3 @@ jobs:
             exit 1
           fi
           echo "All checks passed"
-
-  deploy:
-    name: Deploy to Hugging Face Spaces
-    needs: [all-checks]
-    if: github.ref == 'refs/heads/master' && github.event_name == 'push'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Build frontend
-        run: |
-          cd frontend
-          npm ci
-          npm run build
-
-      - name: Deploy to HF Space
-        env:
-          HF_TOKEN: ${{ secrets.HF_TOKEN }}
-        run: |
-          pip install huggingface-hub -q
-          python scripts/upload_to_hf.py
